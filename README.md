@@ -2,6 +2,8 @@
 
 React-first Blackbox analysis app focused on DVR overlays, event-based review, and flight comparison.
 
+![Blackbox Flight Analyzer UI](./public/images/blackbox-flight-analyzer-ui.png)
+
 ## Commands
 
 - `npm install`
