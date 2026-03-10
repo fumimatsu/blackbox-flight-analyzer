@@ -4,6 +4,10 @@ React-first Blackbox analysis app focused on DVR overlays, event-based review, a
 
 ![Blackbox Flight Analyzer UI](./public/images/blackbox-flight-analyzer-ui.png)
 
+## Product stance
+
+This project does not aim to repackage an existing Blackbox viewer UI. The reusable part is limited to log decoding/runtime infrastructure isolated behind the adapter layer. The product value is built in the React app, DVR-first UX, overlay design, event detection, sync workflow, and comparison experience.
+
 ## Commands
 
 - `npm install`
