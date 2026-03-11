@@ -1,0 +1,222 @@
+export const jaMessages = {
+  common: {
+    na: "n/a",
+    on: "ON",
+    off: "OFF",
+    high: "High",
+    low: "Low",
+    select: "選択",
+    loading: "ログを読み込み中...",
+    resetView: "表示をリセット",
+    view: "表示",
+  },
+  locale: {
+    label: "言語",
+    en: "English",
+    ja: "日本語",
+  },
+  app: {
+    eyebrow: "Blackbox Flight Analyzer MVP",
+    title: "映像主役の Blackbox レビューとイベント比較",
+    emptyEyebrow: "Blackbox Flight Analyzer",
+    emptyTitle: "DVR 主役で Blackbox を解析するビューア",
+    emptyBody:
+      "まず `.bbl` ログを読み込み、その後で選択中のフライトに DVR を付けると、スティック、追従誤差、モーターヘッドルーム、イベント、A/B 比較を重ねて確認できます。",
+    openLogs: "ログを開く",
+    addLogs: "ログを追加",
+    attachDvr: "DVR を追加",
+    noDvr: "このフライトには DVR がまだありません。",
+    noDvrHelp: "動画を付けると、上にスティックや flight-state OSD を重ねられます。",
+    playback: "再生速度",
+    play: "再生",
+    pause: "停止",
+    autoSyncArmed: "ARMED 自動同期",
+    stickGraphs: "スティック履歴",
+    top: "上部",
+    summary: "サマリ",
+    attitude: "姿勢",
+    sticks: "スティック",
+    bottom: "下部",
+    history: "履歴",
+    compare: "比較",
+  },
+  overlay: {
+    arm: "ARM",
+    mode: "Mode",
+    throttle: "Throttle",
+    offset: "Offset",
+    armed: "Armed",
+    disarmed: "Disarmed",
+    attitude: "機体姿勢",
+    front: "前",
+    rear: "後",
+    motors: "Motors",
+    spread: "Spread",
+    headroomLow: "Headroom 低",
+    headroomOk: "Headroom OK",
+    throttleYaw: "Throttle / Yaw",
+    rollPitch: "Roll / Pitch",
+    error: "誤差",
+    status: "状態",
+    rc: "RC",
+    raw: "Raw",
+    setpoint: "Setpoint",
+    noData: "データなし",
+    highThrottle: "高スロットル",
+    headroom: "Headroom",
+    tracking: "Tracking",
+    throttleOff: "スロットルオフ",
+  },
+  timeline: {
+    videoOffset: "Video offset",
+    autoSync: "自動同期",
+    notRun: "未実行",
+    scanningViewer: "ビューア内で解析中... Esc でキャンセルできます。",
+    syncOk: "OK: {message}",
+    syncCancelled: "Cancelled: {message}",
+    syncFailed: "NG: {message}",
+    autoSyncFinished: "自動同期が完了しました。",
+    autoSyncCancelled: "自動同期をキャンセルしました。",
+    autoSyncFailed: "自動同期に失敗しました。",
+  },
+  syncNotice: {
+    eyebrow: "自動同期",
+    scanningTitle: "DVR を解析中...",
+    successTitle: "同期成功",
+    cancelledTitle: "同期キャンセル",
+    failedTitle: "同期失敗",
+    scanningMessage: "DVR から ARMED を探しています。Esc でキャンセルできます。",
+    fallback: "自動同期が完了しました。",
+    loadedPreparing: "DVR を読み込みました。ARMED 自動同期を準備しています...",
+    notDetected: "先頭 10 秒では ARMED を検出できませんでした。",
+    rejectedCandidate:
+      "低信頼の ARMED 候補を {time}s (OCR {confidence}%) で棄却しました。offset を手動調整してください。",
+    detectedAt: "ARMED を {time}s で検出しました (OCR {confidence}%)",
+  },
+  history: {
+    title: "履歴グラフ",
+    throttle: "スロットル",
+    rollError: "Roll error",
+    pitchError: "Pitch error",
+    rpmAvg: "RPM avg",
+  },
+  events: {
+    title: "解析イベント",
+    none: "現在のヒューリスティックではイベントが見つかりませんでした。",
+    highThrottleStraight: "高スロットル直進",
+    highThrottleStraightReason:
+      "操縦入力が少ない状態で、追従性と滑らかさを見返すのに向いています。",
+    highThrottleStraightDetail:
+      "高スロットルかつ低いスティック入力。ピークスロットル {peakThrottle}%",
+    chopTurn: "スロットルカット + ターン",
+    chopTurnReason:
+      "スロットルを抜いて曲げたときの不安定さを見つけるのに向いています。",
+    chopTurnDetail:
+      "スロットルを落としてターンに入りました。最大ターン入力 {peakTurnInput}",
+    loadedRollArc: "荷重ロールアーク",
+    loadedRollArcReason:
+      "スロットルを残したロールターン中の追従を見返すのに向いています。",
+    loadedRollArcDetail:
+      "ロール要求を維持しながらスロットルオン。ピークスロットル {peakThrottle}%",
+    highErrorBurst: "追従外れバースト",
+    highErrorBurstReason:
+      "モーター飽和が主因でない追従エラーの急増を見つけるのに向いています。",
+    highErrorBurstDetail:
+      "飽和なしで追従誤差が {peakError}°/s まで上がりました",
+    saturationBurst: "Headroom 制限バースト",
+    saturationBurstReason:
+      "モーターが張り付き気味になる区間を探すのに向いています。",
+    saturationBurstDetail:
+      "モーターヘッドルームが不足気味でした。最大モーター出力 {peakMotor}%",
+  },
+  compare: {
+    title: "比較",
+    description: "単一動画を前提にした、同種イベント比較の土台です。",
+    flightA: "Flight A",
+    flightB: "Flight B",
+    eventFocus: "注目イベント",
+    wholeFlight: "フライト全体",
+    noSummary: "2 本のログを読み込むと A/B 比較が使えます。",
+    scope: "対象範囲",
+    lowerBetter: "低いほど良い",
+    higherBetter: "高いほど良い",
+    limits: "注意点",
+    wholeFlightScope: "フライト全体",
+    eventScope: "{label} イベント",
+    wholeFlightCaveat:
+      "フライト全体の比較は粗いです。より近い条件で比べたいときは Event focus を使ってください。",
+    eventCountMismatch:
+      "イベント数が異なります ({a} vs {b})。そのため、指標は 1 対 1 の比較ではなく、該当サンプルをまとめて比較しています。",
+    hiddenNeedSamples:
+      "{label} は非表示です。両フライトで {minRequired} サンプル以上必要です (A {aCount}, B {bCount})。",
+    hiddenInvalid:
+      "{label} は非表示です。揃ったサンプルから有効な値を作れませんでした。",
+    rollTrackingRmse: "Roll tracking RMSE",
+    rollTrackingMeaning:
+      "低いほど、要求したロール動作に近く追従できています。",
+    pitchTrackingRmse: "Pitch tracking RMSE",
+    pitchTrackingMeaning:
+      "低いほど、要求したピッチ動作に近く追従できています。",
+    saturationShare: "Saturation share",
+    saturationShareMeaning:
+      "低いほど、Headroom 制限でモーターが張り付き気味の時間が少ないです。",
+    highThrottleTracking: "High-throttle tracking",
+    highThrottleTrackingMeaning:
+      "低いほど、高スロットル時の追従が良好です。",
+    loadedTurnTracking: "Loaded-turn tracking",
+    loadedTurnTrackingMeaning:
+      "低いほど、荷重のかかったロールターン中の追従誤差が少ないです。",
+  },
+  diagnostics: {
+    title: "レビュー所見",
+    description:
+      "Betaflight 公式チューニングノートを根拠にした、慎重なルールベース所見です。",
+    empty:
+      "十分に強い診断ルールはまだ一致していません。穏やかな区間や判断材料不足の区間では正常です。",
+    likelyRelatedTo: "Likely related to",
+    confidence: "Confidence: {value}",
+    checkNext: "Check next",
+    officialBasis: "Official basis",
+    confidenceMedium: "medium",
+    confidenceLow: "low",
+    headroomLabel: "Headroom 不足の可能性",
+    headroomEvidence:
+      "Headroom 制限が繰り返し出ている状況と整合します。Saturation share {share}%、最大モーター出力 {peak}%。",
+    headroomCheck1:
+      "PID / filter の問題と決めつける前に、まず power limit の可能性を確認してください。",
+    headroomCheck2:
+      "機体側の prop / motor / weight / throttle cap 由来の headroom 不足を確認してください。",
+    headroomCheck3:
+      "特定の loaded turn だけで出るなら、同じイベントを setup 変更前後で見比べてください。",
+    lowThrottleLabel: "低スロットル時の不安定さを要確認",
+    lowThrottleEvidence:
+      "スロットルを抜いた後の不安定さと整合します。低スロットル帯の平均誤差 {value}°/s、飽和は少なめです。",
+    lowThrottleCheck1:
+      "chop や低スロットルターンが荒れるなら、D-term と filter delay のバランスを確認してください。",
+    lowThrottleCheck2:
+      "ノイズ対策のために filter delay が大きいなら、RPM / dynamic notch の状態も確認してください。",
+    lowThrottleCheck3:
+      "大きく PID を触る前に、低スロットル時のモーター挙動と dynamic idle を確認してください。",
+  },
+  status: {
+    settled: "安定",
+    dataIncomplete: "データ不足",
+    headroomLimited: "Headroom 制限",
+    trackingOff: "追従外れ",
+    highSpeedRun: "高スロットル",
+    throttleOff: "スロットルオフ",
+    band: {
+      unknown: "不明",
+      high: "高",
+      midHigh: "中高",
+      mid: "中",
+      low: "低",
+      idle: "アイドル",
+    },
+  },
+  errors: {
+    skippedUnreadable: "{file}: unreadable section を {count} 件スキップしました。",
+    fileError: "{file}: {message}",
+    noReadableSection: "このファイルでは readable な log section を見つけられませんでした。",
+  },
+};

@@ -1,3 +1,5 @@
+import { translate } from "../../../i18n/index.js";
+
 export const EVENT_TYPES = {
   HIGH_THROTTLE_STRAIGHT: "high-throttle-straight",
   CHOP_TURN: "chop-turn",
@@ -11,39 +13,40 @@ export const EVENT_CONFIG = {
     minDurationUs: 350000,
     maxGapUs: 100000,
     priority: 1,
-    label: "High-throttle straight",
-    reviewReason: "Useful for checking tracking and smoothness when pilot input is low.",
+    labelKey: "events.highThrottleStraight",
+    reviewReasonKey: "events.highThrottleStraightReason",
   },
   [EVENT_TYPES.CHOP_TURN]: {
     minDurationUs: 220000,
     maxGapUs: 80000,
     priority: 2,
-    label: "Throttle chop + turn",
-    reviewReason: "Useful for spotting instability when throttle drops into a turn.",
+    labelKey: "events.chopTurn",
+    reviewReasonKey: "events.chopTurnReason",
   },
   [EVENT_TYPES.LOADED_ROLL_ARC]: {
     minDurationUs: 260000,
     maxGapUs: 90000,
     priority: 2,
-    label: "Loaded roll arc",
-    reviewReason: "Useful for checking loaded-turn tracking under sustained roll demand.",
+    labelKey: "events.loadedRollArc",
+    reviewReasonKey: "events.loadedRollArcReason",
   },
   [EVENT_TYPES.HIGH_ERROR_BURST]: {
     minDurationUs: 180000,
     maxGapUs: 60000,
     priority: 3,
-    label: "Tracking-off burst",
-    reviewReason: "Useful when tracking error spikes without obvious motor saturation.",
+    labelKey: "events.highErrorBurst",
+    reviewReasonKey: "events.highErrorBurstReason",
   },
   [EVENT_TYPES.SATURATION_BURST]: {
     minDurationUs: 160000,
     maxGapUs: 50000,
     priority: 3,
-    label: "Headroom-limited burst",
-    reviewReason: "Useful for locating moments where motors appear to max out.",
+    labelKey: "events.saturationBurst",
+    reviewReasonKey: "events.saturationBurstReason",
   },
 };
 
-export function getEventLabel(type) {
-  return EVENT_CONFIG[type]?.label ?? type;
+export function getEventLabel(type, locale = "en") {
+  const config = EVENT_CONFIG[type];
+  return config ? translate(locale, config.labelKey) : type;
 }

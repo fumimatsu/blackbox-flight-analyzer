@@ -1,3 +1,5 @@
+import { translate } from "../../../i18n/index.js";
+
 export function getThrottleBand(throttle) {
   if (throttle === null || throttle === undefined || Number.isNaN(throttle)) {
     return "unknown";
@@ -69,20 +71,26 @@ export function getFlightStatusFlags(snapshot) {
   };
 }
 
-export function getFlightStatusSummary(snapshot) {
+export function getFlightStatusSummary(snapshot, locale = "en") {
   const status = getFlightStatusFlags(snapshot);
 
-  let label = "Settled";
+  let labelKey = "status.settled";
   if (status.dataIncomplete) {
-    label = "Data incomplete";
-  } else if (status.headroomLimited) label = "Headroom limited";
-  else if (status.trackingOff) label = "Tracking off";
-  else if (status.highSpeedRun) label = "High-speed run";
-  else if (status.throttleOff) label = "Throttle off";
+    labelKey = "status.dataIncomplete";
+  } else if (status.headroomLimited) labelKey = "status.headroomLimited";
+  else if (status.trackingOff) labelKey = "status.trackingOff";
+  else if (status.highSpeedRun) labelKey = "status.highSpeedRun";
+  else if (status.throttleOff) labelKey = "status.throttleOff";
 
   return {
-    label,
-    throttleBand: status.throttleBand,
+    label: translate(locale, labelKey),
+    throttleBand:
+      status.throttleBand === "mid-high"
+        ? translate(locale, "status.band.midHigh")
+        : translate(
+            locale,
+            `status.band.${status.throttleBand === "unknown" ? "unknown" : status.throttleBand}`
+          ),
     saturation: status.headroomLimited,
     errorMagnitude: status.errorMagnitude,
     motor: status.motor,

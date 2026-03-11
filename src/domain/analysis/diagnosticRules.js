@@ -1,5 +1,6 @@
 import { getErrorMagnitude, getFlightStatusSummary } from "../blackbox/derived/flightDerived.js";
 import { EVENT_TYPES } from "../blackbox/events/eventConfig.js";
+import { translate } from "../../i18n/index.js";
 
 const OFFICIAL_SOURCES = {
   freestyle: "https://www.betaflight.com/docs/wiki/guides/current/Freestyle-Tuning-Principles",
@@ -21,11 +22,11 @@ function max(values) {
   return Math.max(...values);
 }
 
-function buildEvidence(flight) {
+function buildEvidence(flight, locale) {
   const samples = flight?.window?.samples ?? [];
   const events = flight?.events ?? [];
 
-  const statuses = samples.map((sample) => getFlightStatusSummary(sample));
+  const statuses = samples.map((sample) => getFlightStatusSummary(sample, locale));
   const errorMagnitudes = samples
     .map((sample) => getErrorMagnitude(sample.error))
     .filter((value) => value !== null);
@@ -63,7 +64,7 @@ function confidenceLabel(score) {
 export const DIAGNOSTIC_RULES = [
   {
     id: "headroom-limited",
-    label: "Headroom limitation likely",
+    labelKey: "diagnostics.headroomLabel",
     eventTypes: [EVENT_TYPES.SATURATION_BURST, EVENT_TYPES.LOADED_ROLL_ARC],
     predicate(evidence) {
       return (
@@ -72,15 +73,16 @@ export const DIAGNOSTIC_RULES = [
         (evidence.peakMotor ?? 0) >= 95
       );
     },
-    evidenceSummary(evidence) {
-      return `Consistent with repeated headroom-limited output. Saturation share ${(
-        evidence.saturationShare * 100
-      ).toFixed(1)}%, peak motor ${Math.round(evidence.peakMotor ?? 0)}%.`;
+    evidenceSummary(evidence, locale) {
+      return translate(locale, "diagnostics.headroomEvidence", {
+        share: (evidence.saturationShare * 100).toFixed(1),
+        peak: Math.round(evidence.peakMotor ?? 0),
+      });
     },
-    likelyChecks: [
-      "Check whether the move is power-limited before assuming a PID/filter issue.",
-      "Check prop / motor / weight / throttle cap headroom on the affected build.",
-      "If this shows up only in specific loaded turns, compare the same event after setup changes.",
+    likelyCheckKeys: [
+      "diagnostics.headroomCheck1",
+      "diagnostics.headroomCheck2",
+      "diagnostics.headroomCheck3",
     ],
     confidence(evidence) {
       const score = Math.min(
@@ -94,7 +96,7 @@ export const DIAGNOSTIC_RULES = [
   },
   {
     id: "low-throttle-instability",
-    label: "Low-throttle instability worth checking",
+    labelKey: "diagnostics.lowThrottleLabel",
     eventTypes: [EVENT_TYPES.CHOP_TURN, EVENT_TYPES.HIGH_ERROR_BURST],
     predicate(evidence) {
       return (
@@ -104,15 +106,15 @@ export const DIAGNOSTIC_RULES = [
         (evidence.lowThrottleErrorMean ?? 0) >= 75
       );
     },
-    evidenceSummary(evidence) {
-      return `Consistent with instability after throttle reduction. Mean low-throttle error ${(
-        evidence.lowThrottleErrorMean ?? 0
-      ).toFixed(1)}°/s with little saturation.`;
+    evidenceSummary(evidence, locale) {
+      return translate(locale, "diagnostics.lowThrottleEvidence", {
+        value: (evidence.lowThrottleErrorMean ?? 0).toFixed(1),
+      });
     },
-    likelyChecks: [
-      "Check D-term authority versus filter delay if chops and low-throttle turns look messy.",
-      "Check RPM / dynamic notch setup if noise control still forces high filter delay.",
-      "Check low-throttle motor behavior and dynamic idle before making large PID changes.",
+    likelyCheckKeys: [
+      "diagnostics.lowThrottleCheck1",
+      "diagnostics.lowThrottleCheck2",
+      "diagnostics.lowThrottleCheck3",
     ],
     confidence(evidence) {
       const score = Math.min(
@@ -126,20 +128,20 @@ export const DIAGNOSTIC_RULES = [
   },
 ];
 
-export function evaluateDiagnosticRules(flight) {
+export function evaluateDiagnosticRules(flight, locale = "en") {
   if (!flight?.window?.samples?.length) {
     return [];
   }
 
-  const evidence = buildEvidence(flight);
+  const evidence = buildEvidence(flight, locale);
 
   return DIAGNOSTIC_RULES.filter((rule) => rule.predicate(evidence)).map((rule) => ({
     id: rule.id,
-    label: rule.label,
+    label: translate(locale, rule.labelKey),
     eventTypes: rule.eventTypes,
-    confidence: rule.confidence(evidence),
-    evidenceSummary: rule.evidenceSummary(evidence),
-    likelyChecks: rule.likelyChecks,
+    confidence: translate(locale, `diagnostics.confidence${rule.confidence(evidence).replace(/^./, (value) => value.toUpperCase())}`),
+    evidenceSummary: rule.evidenceSummary(evidence, locale),
+    likelyChecks: rule.likelyCheckKeys.map((key) => translate(locale, key)),
     officialSources: rule.officialSources,
   }));
 }

@@ -1,5 +1,6 @@
 import { getErrorMagnitude, getFlightStatusSummary } from "../derived/flightDerived.js";
 import { EVENT_CONFIG, EVENT_TYPES } from "./eventConfig.js";
+import { translate } from "../../../i18n/index.js";
 
 function axisPeak(values) {
   const numbers = values.filter((value) => value !== null && value !== undefined && !Number.isNaN(value));
@@ -9,7 +10,7 @@ function axisPeak(values) {
   return Math.max(...numbers.map((value) => Math.abs(value)));
 }
 
-function summarizeSegment(type, samples) {
+function summarizeSegment(type, samples, locale) {
   const config = EVENT_CONFIG[type];
   const peakError = Math.round(
     Math.max(...samples.map((sample) => sample.errorMagnitude ?? 0))
@@ -27,38 +28,38 @@ function summarizeSegment(type, samples) {
   switch (type) {
     case EVENT_TYPES.HIGH_THROTTLE_STRAIGHT:
       return {
-        summary: config.label,
-        detail: `High throttle with low stick input. Peak throttle ${peakThrottle}%`,
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.highThrottleStraightDetail", { peakThrottle }),
       };
     case EVENT_TYPES.CHOP_TURN:
       return {
-        summary: config.label,
-        detail: `Throttle dropped into a turn. Peak turn input ${peakTurnInput}`,
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.chopTurnDetail", { peakTurnInput }),
       };
     case EVENT_TYPES.LOADED_ROLL_ARC:
       return {
-        summary: config.label,
-        detail: `Sustained roll demand with throttle on. Peak throttle ${peakThrottle}%`,
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.loadedRollArcDetail", { peakThrottle }),
       };
     case EVENT_TYPES.HIGH_ERROR_BURST:
       return {
-        summary: config.label,
-        detail: `Tracking error peaked at ${peakError}°/s without saturation`,
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.highErrorBurstDetail", { peakError }),
       };
     case EVENT_TYPES.SATURATION_BURST:
       return {
-        summary: config.label,
-        detail: `Motor headroom looked limited. Peak motor ${peakMotor}%`,
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.saturationBurstDetail", { peakMotor }),
       };
     default:
       return {
-        summary: config.label,
-        detail: config.reviewReason,
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, config.reviewReasonKey),
       };
   }
 }
 
-function finalizeSegment(events, type, startUs, endUs, samples) {
+function finalizeSegment(events, type, startUs, endUs, samples, locale) {
   const config = EVENT_CONFIG[type];
   if (startUs === null || endUs === null || !samples.length) {
     return;
@@ -70,7 +71,7 @@ function finalizeSegment(events, type, startUs, endUs, samples) {
   }
 
   const severity = samples.reduce((peak, sample) => Math.max(peak, sample.score ?? 0), 0);
-  const summary = summarizeSegment(type, samples);
+  const summary = summarizeSegment(type, samples, locale);
 
   events.push({
     id: `${type}-${startUs}`,
@@ -82,11 +83,11 @@ function finalizeSegment(events, type, startUs, endUs, samples) {
     priority: config.priority,
     summary: summary.summary,
     detail: summary.detail,
-    reviewReason: config.reviewReason,
+    reviewReason: translate(locale, config.reviewReasonKey),
   });
 }
 
-function segmentByPredicate(samples, type, predicate) {
+function segmentByPredicate(samples, type, predicate, locale) {
   const events = [];
   const config = EVENT_CONFIG[type];
   let currentStartUs = null;
@@ -113,7 +114,7 @@ function segmentByPredicate(samples, type, predicate) {
     }
 
     if (currentStartUs !== null) {
-      finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples);
+      finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples, locale);
       currentStartUs = null;
       currentEndUs = null;
       currentSamples = [];
@@ -121,7 +122,7 @@ function segmentByPredicate(samples, type, predicate) {
   }
 
   if (currentStartUs !== null && currentEndUs !== null) {
-    finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples);
+    finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples, locale);
   }
 
   return events;
@@ -163,7 +164,7 @@ function pruneOverlappingEvents(events) {
   return kept.sort((left, right) => left.startUs - right.startUs);
 }
 
-export function detectAnalysisEvents(windowSlice) {
+export function detectAnalysisEvents(windowSlice, locale = "en") {
   const samples = windowSlice.samples;
   if (!samples.length) {
     return [];
@@ -210,7 +211,7 @@ export function detectAnalysisEvents(windowSlice) {
       return {
         score: (sample.rc.throttle ?? 0) + ((sample.errorMagnitude ?? 0) * 0.3),
       };
-    }),
+    }, locale),
     ...segmentByPredicate(derived, EVENT_TYPES.CHOP_TURN, (sample) => {
       if (
         sample.previousThrottle === null ||
@@ -227,7 +228,7 @@ export function detectAnalysisEvents(windowSlice) {
       return {
         score: (sample.throttleDrop ?? 0) + sample.turnInput,
       };
-    }),
+    }, locale),
     ...segmentByPredicate(derived, EVENT_TYPES.LOADED_ROLL_ARC, (sample) => {
       if (
         sample.rc.throttle === null ||
@@ -243,7 +244,7 @@ export function detectAnalysisEvents(windowSlice) {
       return {
         score: Math.abs(sample.setpoint.roll) + (sample.rc.throttle ?? 0),
       };
-    }),
+    }, locale),
     ...segmentByPredicate(derived, EVENT_TYPES.HIGH_ERROR_BURST, (sample) => {
       if (
         sample.errorMagnitude === null ||
@@ -256,7 +257,7 @@ export function detectAnalysisEvents(windowSlice) {
       return {
         score: sample.errorMagnitude,
       };
-    }),
+    }, locale),
     ...segmentByPredicate(derived, EVENT_TYPES.SATURATION_BURST, (sample) => {
       if (!sample.status.saturation || sample.rc.throttle === null || sample.rc.throttle < 45) {
         return false;
@@ -265,7 +266,7 @@ export function detectAnalysisEvents(windowSlice) {
       return {
         score: (sample.status.motor.max ?? 0) + (sample.errorMagnitude ?? 0) * 0.2,
       };
-    }),
+    }, locale),
   ];
 
   return pruneOverlappingEvents(events);

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { detectInitialLocale } from "../../i18n/index.js";
 
 const DEFAULT_WINDOW_US = 8 * 1000000;
 
@@ -7,6 +8,7 @@ export const useAppStore = create((set) => ({
   selectedFlightId: null,
   currentTimeUs: 0,
   visibleWindowUs: DEFAULT_WINDOW_US,
+  locale: detectInitialLocale(),
   playback: {
     isPlaying: false,
     rate: 1,
@@ -78,6 +80,9 @@ export const useAppStore = create((set) => ({
   },
   setVisibleWindowUs(visibleWindowUs) {
     set({ visibleWindowUs });
+  },
+  setLocale(locale) {
+    set({ locale });
   },
   setPlayback(isPlaying) {
     set((state) => ({ playback: { ...state.playback, isPlaying } }));

@@ -1,4 +1,6 @@
 import { getErrorMagnitude, getFlightStatusSummary } from "../blackbox/derived/flightDerived.js";
+import { getEventLabel } from "../blackbox/events/eventConfig.js";
+import { translate } from "../../i18n/index.js";
 
 const MIN_TOTAL_SAMPLES = 20;
 const MIN_CONDITION_SAMPLES = 20;
@@ -50,7 +52,7 @@ function selectSamples(flight, eventType) {
   };
 }
 
-function summarize(flight, eventType) {
+function summarize(flight, eventType, locale) {
   const selected = selectSamples(flight, eventType);
   const highThrottle = selected.samples
     .filter((sample) => sample.rc.throttle !== null && sample.rc.throttle >= 70)
@@ -74,7 +76,7 @@ function summarize(flight, eventType) {
     rollErrors: selected.samples.map((sample) => sample.error.roll),
     pitchErrors: selected.samples.map((sample) => sample.error.pitch),
     saturationSamples: selected.samples.map((sample) =>
-      getFlightStatusSummary(sample).saturation ? 1 : 0
+      getFlightStatusSummary(sample, locale).saturation ? 1 : 0
     ),
     highThrottleErrors: highThrottle,
     loadedTurnErrors: loadedTurn,
@@ -82,6 +84,7 @@ function summarize(flight, eventType) {
 }
 
 function buildMetric({
+  locale,
   label,
   meaning,
   smallerIsBetter = true,
@@ -98,7 +101,12 @@ function buildMetric({
   if (aCount < minRequired || bCount < minRequired) {
     return {
       metric: null,
-      note: `${label} hidden: needs >= ${minRequired} aligned samples in both flights (A ${aCount}, B ${bCount}).`,
+      note: translate(locale, "compare.hiddenNeedSamples", {
+        label,
+        minRequired,
+        aCount,
+        bCount,
+      }),
     };
   }
 
@@ -107,7 +115,7 @@ function buildMetric({
   if (a === null || b === null) {
     return {
       metric: null,
-      note: `${label} hidden: aligned samples did not produce a valid value.`,
+      note: translate(locale, "compare.hiddenInvalid", { label }),
     };
   }
 
@@ -127,33 +135,37 @@ function buildMetric({
   };
 }
 
-function formatScope(eventType) {
-  return eventType ? `${eventType} events` : "Whole-flight window";
+function formatScope(eventType, locale) {
+  return eventType
+    ? translate(locale, "compare.eventScope", { label: getEventLabel(eventType, locale) })
+    : translate(locale, "compare.wholeFlightScope");
 }
 
-export function getCompareSummary(flightA, flightB, eventType = null) {
+export function getCompareSummary(flightA, flightB, eventType = null, locale = "en") {
   if (!flightA || !flightB) {
     return null;
   }
 
-  const summaryA = summarize(flightA, eventType);
-  const summaryB = summarize(flightB, eventType);
+  const summaryA = summarize(flightA, eventType, locale);
+  const summaryB = summarize(flightB, eventType, locale);
   const notes = [];
 
   if (!eventType) {
-    notes.push(
-      "Whole-flight compare is broad. Use Event focus when you want tighter scene matching."
-    );
+    notes.push(translate(locale, "compare.wholeFlightCaveat"));
   } else if (summaryA.eventCount !== summaryB.eventCount) {
     notes.push(
-      `Event counts differ (${summaryA.eventCount} vs ${summaryB.eventCount}), so metrics compare pooled matching samples rather than pairwise events.`
+      translate(locale, "compare.eventCountMismatch", {
+        a: summaryA.eventCount,
+        b: summaryB.eventCount,
+      })
     );
   }
 
   const metricResults = [
     buildMetric({
-      label: "Roll tracking RMSE",
-      meaning: "Lower means roll tracking stayed closer to the requested motion.",
+      locale,
+      label: translate(locale, "compare.rollTrackingRmse"),
+      meaning: translate(locale, "compare.rollTrackingMeaning"),
       unit: "°/s",
       aValues: definedNumbers(summaryA.rollErrors),
       bValues: definedNumbers(summaryB.rollErrors),
@@ -161,8 +173,9 @@ export function getCompareSummary(flightA, flightB, eventType = null) {
       threshold: MIN_TOTAL_SAMPLES,
     }),
     buildMetric({
-      label: "Pitch tracking RMSE",
-      meaning: "Lower means pitch tracking stayed closer to the requested motion.",
+      locale,
+      label: translate(locale, "compare.pitchTrackingRmse"),
+      meaning: translate(locale, "compare.pitchTrackingMeaning"),
       unit: "°/s",
       aValues: definedNumbers(summaryA.pitchErrors),
       bValues: definedNumbers(summaryB.pitchErrors),
@@ -170,8 +183,9 @@ export function getCompareSummary(flightA, flightB, eventType = null) {
       threshold: MIN_TOTAL_SAMPLES,
     }),
     buildMetric({
-      label: "Saturation share",
-      meaning: "Lower means less time spent with headroom-limited motor output.",
+      locale,
+      label: translate(locale, "compare.saturationShare"),
+      meaning: translate(locale, "compare.saturationShareMeaning"),
       unit: "%",
       aValues: summaryA.saturationSamples,
       bValues: summaryB.saturationSamples,
@@ -179,16 +193,18 @@ export function getCompareSummary(flightA, flightB, eventType = null) {
       threshold: MIN_TOTAL_SAMPLES,
     }),
     buildMetric({
-      label: "High-throttle tracking",
-      meaning: "Lower means better tracking while throttle was already high.",
+      locale,
+      label: translate(locale, "compare.highThrottleTracking"),
+      meaning: translate(locale, "compare.highThrottleTrackingMeaning"),
       unit: "°/s",
       aValues: summaryA.highThrottleErrors,
       bValues: summaryB.highThrottleErrors,
       aggregate: mean,
     }),
     buildMetric({
-      label: "Loaded-turn tracking",
-      meaning: "Lower means less tracking error during committed roll-loaded turns.",
+      locale,
+      label: translate(locale, "compare.loadedTurnTracking"),
+      meaning: translate(locale, "compare.loadedTurnTrackingMeaning"),
       unit: "°/s",
       aValues: summaryA.loadedTurnErrors,
       bValues: summaryB.loadedTurnErrors,
@@ -207,7 +223,7 @@ export function getCompareSummary(flightA, flightB, eventType = null) {
     .filter(Boolean);
 
   return {
-    scopeLabel: formatScope(eventType),
+    scopeLabel: formatScope(eventType, locale),
     metrics,
     notes,
     coverage: {

@@ -24,6 +24,7 @@ import {
   detectArmedOverlayTime,
 } from "../domain/sync/autoVideoSync.js";
 import { evaluateDiagnosticRules } from "../domain/analysis/diagnosticRules.js";
+import { SUPPORTED_LOCALES, translate } from "../i18n/index.js";
 
 const OVERLAY_SAMPLE_INTERVAL_US = 25000;
 const MIN_PLAYBACK_RATE = 0.25;
@@ -130,7 +131,7 @@ function useSelectedFlight() {
   );
 }
 
-function prepareFlight(flight) {
+function prepareFlight(flight, locale = "en") {
   if (!flight) {
     return null;
   }
@@ -138,7 +139,7 @@ function prepareFlight(flight) {
   return {
     ...flight,
     window,
-    events: detectAnalysisEvents(window),
+    events: detectAnalysisEvents(window, locale),
   };
 }
 
@@ -152,6 +153,7 @@ function StickOverlay({
   rawPoint = null,
   setpointPoint = null,
   miniGraph = null,
+  legendLabels,
 }) {
   const rawActive = Boolean(rawPoint);
   const setpointActive = Boolean(setpointPoint);
@@ -211,7 +213,7 @@ function StickOverlay({
       <div className="stick-card__legend">
         <span className="stick-card__legend-item">
           <i className="stick-card__legend-dot stick-card__legend-dot--command" />
-          RC
+          {legendLabels.rc}
         </span>
         <span
           className={`stick-card__legend-item ${
@@ -219,7 +221,7 @@ function StickOverlay({
           }`}
         >
           <i className="stick-card__legend-dot stick-card__legend-dot--raw" />
-          Raw
+          {legendLabels.raw}
         </span>
         <span
           className={`stick-card__legend-item ${
@@ -227,7 +229,7 @@ function StickOverlay({
           }`}
         >
           <i className="stick-card__legend-dot stick-card__legend-dot--setpoint" />
-          Setpoint
+          {legendLabels.setpoint}
         </span>
       </div>
       {miniGraph}
@@ -244,7 +246,7 @@ function StatusPill({ label, value, accent = "neutral", compact = false }) {
   );
 }
 
-function OverlayToggleButton({ active, label, onClick }) {
+function OverlayToggleButton({ active, label, onClick, onLabel, offLabel }) {
   return (
     <button
       className={`transport transport--toggle ${active ? "" : "transport--muted"}`}
@@ -252,7 +254,7 @@ function OverlayToggleButton({ active, label, onClick }) {
       onClick={onClick}
       aria-pressed={active}
     >
-      {label} {active ? "On" : "Off"}
+      {label} {active ? onLabel : offLabel}
     </button>
   );
 }
@@ -268,7 +270,7 @@ function normalizeHeadingDegrees(value) {
   return normalized;
 }
 
-function AttitudeIndicator({ attitude }) {
+function AttitudeIndicator({ attitude, labels }) {
   const roll = attitude?.roll ?? null;
   const pitch = attitude?.pitch ?? null;
   const yaw = normalizeHeadingDegrees(attitude?.yaw ?? null);
@@ -283,14 +285,14 @@ function AttitudeIndicator({ attitude }) {
   return (
     <div className="attitude-card">
       <div className="attitude-card__header">
-        <span>Quad attitude</span>
+        <span>{labels.title}</span>
         <strong>{yawText}</strong>
       </div>
       <div className="attitude-card__scene">
         <div className="attitude-card__ring" />
         <div className="attitude-card__crosshair" />
-        <div className="attitude-card__compass attitude-card__compass--front">Front</div>
-        <div className="attitude-card__compass attitude-card__compass--rear">Rear</div>
+        <div className="attitude-card__compass attitude-card__compass--front">{labels.front}</div>
+        <div className="attitude-card__compass attitude-card__compass--rear">{labels.rear}</div>
         <div className="attitude-card__craft" style={quadStyle}>
           <span className="attitude-card__arm attitude-card__arm--diag-a" />
           <span className="attitude-card__arm attitude-card__arm--diag-b" />
@@ -305,9 +307,9 @@ function AttitudeIndicator({ attitude }) {
         </div>
       </div>
       <div className="attitude-card__values">
-        <span>R {rollText}</span>
-        <span>P {pitchText}</span>
-        <span>Y {yawText}</span>
+        <span>{labels.roll} {rollText}</span>
+        <span>{labels.pitch} {pitchText}</span>
+        <span>{labels.yaw} {yawText}</span>
       </div>
     </div>
   );
@@ -441,7 +443,7 @@ function getFlagSegments(samples, flagKey, minDurationUs = 100000) {
   return segments;
 }
 
-function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
+function ErrorTrendCard({ snapshot, samples, currentTimeUs, t, locale }) {
   const width = 176;
   const height = 38;
   const startUs = samples[0]?.timeUs ?? currentTimeUs ?? 0;
@@ -481,7 +483,7 @@ function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
   return (
     <div className="trend-metric trend-metric--wide">
       <div className="trend-metric__header">
-        <span>Error</span>
+        <span>{t("overlay.error")}</span>
         <div className="trend-metric__values">
           <strong className="trend-metric__value trend-metric__value--roll">
             <span className="trend-metric__value-label">R</span>
@@ -536,7 +538,7 @@ function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
           ))
         ) : (
           <text x={width / 2} y={height / 2 + 4} textAnchor="middle" className="trend-metric__empty">
-            no data
+            {t("overlay.noData")}
           </text>
         )}
       </svg>
@@ -544,20 +546,13 @@ function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
   );
 }
 
-function statusClassName(label) {
-  return label
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
-}
-
-function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
+function StatusTimelineCard({ snapshot, samples, currentTimeUs, t, locale }) {
   const width = 176;
   const laneConfigs = [
-    { key: "headroomLimited", label: "Headroom" },
-    { key: "trackingOff", label: "Tracking" },
-    { key: "highSpeedRun", label: "High throttle" },
-    { key: "throttleOff", label: "Throttle off" },
+    { key: "headroomLimited", label: t("overlay.headroom"), className: "headroom" },
+    { key: "trackingOff", label: t("overlay.tracking"), className: "tracking" },
+    { key: "highSpeedRun", label: t("overlay.highThrottle"), className: "high-throttle" },
+    { key: "throttleOff", label: t("overlay.throttleOff"), className: "throttle-off" },
   ];
   const laneHeight = 12;
   const laneGap = 4;
@@ -572,8 +567,8 @@ function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
   return (
     <div className="status-timeline">
       <div className="status-timeline__header">
-        <span>Status</span>
-        <strong>{snapshot ? getFlightStatusSummary(snapshot).label : "n/a"}</strong>
+        <span>{t("overlay.status")}</span>
+        <strong>{snapshot ? getFlightStatusSummary(snapshot, locale).label : t("common.na")}</strong>
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="status-timeline__chart">
         <rect x="0" y="0" width={width} height={height} className="status-timeline__bg" />
@@ -602,9 +597,7 @@ function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
                     width={Math.max(endX - x, 5)}
                     height={laneHeight}
                     rx="5"
-                    className={`status-timeline__segment status-timeline__segment--${statusClassName(
-                      lane.label
-                    )}`}
+                    className={`status-timeline__segment status-timeline__segment--${lane.className}`}
                   />
                 );
               })}
@@ -613,9 +606,7 @@ function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
                   cx="6"
                   cy={y + laneHeight / 2}
                   r="2.5"
-                  className={`status-timeline__marker status-timeline__marker--${statusClassName(
-                    lane.label
-                  )}`}
+                  className={`status-timeline__marker status-timeline__marker--${lane.className}`}
                 />
               ) : null}
             </g>
@@ -626,7 +617,7 @@ function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
       <div className="status-timeline__legend">
         {laneConfigs.map((lane) => (
           <span key={lane.key} className="status-timeline__legend-item">
-            <i className={`status-timeline__legend-dot status-timeline__legend-dot--${statusClassName(lane.label)}`} />
+            <i className={`status-timeline__legend-dot status-timeline__legend-dot--${lane.className}`} />
             {lane.label}
           </span>
         ))}
@@ -635,17 +626,20 @@ function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
   );
 }
 
-function MotorDetailCard({ motors, spread, saturation }) {
+function MotorDetailCard({ motors, spread, saturation, t }) {
   const peak = motors.length ? Math.max(...motors) : null;
 
   return (
     <div className="motor-detail">
       <div className="motor-detail__header">
-        <span>Motors</span>
+        <span>{t("overlay.motors")}</span>
         <div className="motor-detail__summary">
-          <strong>{peak === null ? "n/a" : percent(peak)}</strong>
-          <em>Spread {percent(spread)}</em>
-          <em>Headroom {peak === null ? "n/a" : saturation ? "Low" : "OK"}</em>
+          <strong>{peak === null ? t("common.na") : percent(peak)}</strong>
+          <em>{t("overlay.spread")} {percent(spread)}</em>
+          <em>
+            {t("overlay.headroom")}{" "}
+            {peak === null ? t("common.na") : saturation ? t("overlay.headroomLow") : t("overlay.headroomOk")}
+          </em>
         </div>
       </div>
       <div className="motor-detail__grid">
@@ -662,7 +656,7 @@ function MotorDetailCard({ motors, spread, saturation }) {
                 <div className="motor-detail__fill" style={{ height: `${fill}%` }} />
               </div>
               <strong className="motor-detail__value">
-                {value === null ? "n/a" : `${Math.round(value)}%`}
+                {value === null ? t("common.na") : `${Math.round(value)}%`}
               </strong>
             </div>
           );
@@ -677,6 +671,7 @@ function StickHistoryMini({
   currentTimeUs,
   width = 250,
   height = 54,
+  legendLabels,
 }) {
   const startUs = channels[0]?.samples[0]?.timeUs ?? currentTimeUs ?? 0;
   const endUs =
@@ -713,7 +708,7 @@ function StickHistoryMini({
         {channels.map((channel) => (
           <span key={channel.key} className="stick-history__legend-item">
             <i className={`stick-history__legend-swatch ${channel.legendClassName}`} />
-            {channel.legendLabel}
+            {legendLabels?.[channel.key] ?? channel.legendLabel}
           </span>
         ))}
       </div>
@@ -721,31 +716,31 @@ function StickHistoryMini({
   );
 }
 
-function HistoryGraph({ flight, currentTimeUs }) {
+function HistoryGraph({ flight, currentTimeUs, t }) {
   const width = 960;
   const laneHeight = 42;
   const lanes = [
     {
       key: "throttle",
-      label: "Throttle",
+      label: t("history.throttle"),
       className: "history__line history__line--throttle",
       valueSelector: (sample) => sample.rc.throttle,
     },
     {
       key: "roll",
-      label: "Roll error",
+      label: t("history.rollError"),
       className: "history__line history__line--roll",
       valueSelector: (sample) => sample.error.roll,
     },
     {
       key: "pitch",
-      label: "Pitch error",
+      label: t("history.pitchError"),
       className: "history__line history__line--pitch",
       valueSelector: (sample) => sample.error.pitch,
     },
     {
       key: "rpm",
-      label: "RPM avg",
+      label: t("history.rpmAvg"),
       className: "history__line history__line--rpm",
       valueSelector: (sample) => getRpmStats(sample.rpm).avg,
     },
@@ -757,7 +752,7 @@ function HistoryGraph({ flight, currentTimeUs }) {
   return (
     <div className="history">
       <div className="history__header">
-        <h3>Compact History</h3>
+        <h3>{t("history.title")}</h3>
         <span>{formatMicroseconds(currentTimeUs - flight.minTimeUs)}</span>
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="history__svg">
@@ -820,10 +815,10 @@ function HistoryGraph({ flight, currentTimeUs }) {
   );
 }
 
-function EventList({ events, onSelect }) {
+function EventList({ events, onSelect, t }) {
   return (
     <div className="event-list">
-      <h3>Analysis Events</h3>
+      <h3>{t("events.title")}</h3>
       {events.length ? (
         events.slice(0, 12).map((event) => (
           <button
@@ -840,40 +835,40 @@ function EventList({ events, onSelect }) {
           </button>
         ))
       ) : (
-        <p className="muted">No event matched the current heuristics.</p>
+        <p className="muted">{t("events.none")}</p>
       )}
     </div>
   );
 }
 
-function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChange }) {
+function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChange, locale, t }) {
   const preparedA = useMemo(
-    () => prepareFlight(flights.find((flight) => flight.id === compareSession.flightAId)),
-    [flights, compareSession.flightAId]
+    () => prepareFlight(flights.find((flight) => flight.id === compareSession.flightAId), locale),
+    [flights, compareSession.flightAId, locale]
   );
   const preparedB = useMemo(
-    () => prepareFlight(flights.find((flight) => flight.id === compareSession.flightBId)),
-    [flights, compareSession.flightBId]
+    () => prepareFlight(flights.find((flight) => flight.id === compareSession.flightBId), locale),
+    [flights, compareSession.flightBId, locale]
   );
   const summary = useMemo(
-    () => getCompareSummary(preparedA, preparedB, compareSession.selectedEventType),
-    [preparedA, preparedB, compareSession.selectedEventType]
+    () => getCompareSummary(preparedA, preparedB, compareSession.selectedEventType, locale),
+    [preparedA, preparedB, compareSession.selectedEventType, locale]
   );
 
   return (
     <aside className="compare-panel">
       <div className="compare-panel__header">
-        <h3>Compare</h3>
-        <p>Single-video compare foundation with same-event metrics.</p>
+        <h3>{t("compare.title")}</h3>
+        <p>{t("compare.description")}</p>
       </div>
       <div className="compare-panel__controls">
         <label>
-          Flight A
+          {t("compare.flightA")}
           <select
             value={compareSession.flightAId ?? ""}
             onChange={(event) => onFlightChange("flightAId", event.target.value)}
           >
-            <option value="">Select</option>
+            <option value="">{t("common.select")}</option>
             {flights.map((flight) => (
               <option key={flight.id} value={flight.id}>
                 {flight.name}
@@ -882,12 +877,12 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
           </select>
         </label>
         <label>
-          Flight B
+          {t("compare.flightB")}
           <select
             value={compareSession.flightBId ?? ""}
             onChange={(event) => onFlightChange("flightBId", event.target.value)}
           >
-            <option value="">Select</option>
+            <option value="">{t("common.select")}</option>
             {flights.map((flight) => (
               <option key={flight.id} value={flight.id}>
                 {flight.name}
@@ -896,15 +891,15 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
           </select>
         </label>
         <label>
-          Event focus
+          {t("compare.eventFocus")}
           <select
             value={compareSession.selectedEventType ?? ""}
             onChange={(event) => onEventTypeChange(event.target.value || null)}
           >
-            <option value="">Whole flight</option>
+            <option value="">{t("compare.wholeFlight")}</option>
             {Object.values(EVENT_TYPES).map((type) => (
               <option key={type} value={type}>
-                {getEventLabel(type)}
+                {getEventLabel(type, locale)}
               </option>
             ))}
           </select>
@@ -913,7 +908,7 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
       {summary ? (
         <div className="compare-panel__metrics">
           <div className="compare-metric compare-metric--context">
-            <span>Scope</span>
+            <span>{t("compare.scope")}</span>
             <strong>{summary.scopeLabel}</strong>
             <p>
               A {summary.coverage.a.sampleCount} samples /{" "}
@@ -941,14 +936,14 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
                 {signed(metric.delta, 1)}
                 {metric.unit}
                 {" · "}
-                {metric.smallerIsBetter ? "Lower is better" : "Higher is better"}
+                {metric.smallerIsBetter ? t("compare.lowerBetter") : t("compare.higherBetter")}
               </em>
               <p>{metric.meaning}</p>
             </div>
           ))}
           {summary.notes.length ? (
             <div className="compare-metric compare-metric--notes">
-              <span>Limits</span>
+              <span>{t("compare.limits")}</span>
               {summary.notes.map((note) => (
                 <p key={note}>{note}</p>
               ))}
@@ -956,35 +951,35 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
           ) : null}
         </div>
       ) : (
-        <p className="muted">Load two logs to enable A/B summaries.</p>
+        <p className="muted">{t("compare.noSummary")}</p>
       )}
     </aside>
   );
 }
 
-function DiagnosticPanel({ insights }) {
+function DiagnosticPanel({ insights, t }) {
   return (
     <aside className="compare-panel diagnostic-panel">
       <div className="compare-panel__header">
-        <h3>Review Insights</h3>
-        <p>Rule-based, cautious guidance grounded in Betaflight official tuning notes.</p>
+        <h3>{t("diagnostics.title")}</h3>
+        <p>{t("diagnostics.description")}</p>
       </div>
       {insights.length ? (
         <div className="compare-panel__metrics">
           {insights.map((insight) => (
             <div key={insight.id} className="compare-metric diagnostic-card">
-              <span>Likely related to</span>
+              <span>{t("diagnostics.likelyRelatedTo")}</span>
               <strong>{insight.label}</strong>
-              <em>Confidence: {insight.confidence}</em>
+              <em>{t("diagnostics.confidence", { value: insight.confidence })}</em>
               <p>{insight.evidenceSummary}</p>
               <div className="diagnostic-card__section">
-                <span>Check next</span>
+                <span>{t("diagnostics.checkNext")}</span>
                 {insight.likelyChecks.map((item) => (
                   <p key={item}>{item}</p>
                 ))}
               </div>
               <div className="diagnostic-card__section">
-                <span>Official basis</span>
+                <span>{t("diagnostics.officialBasis")}</span>
                 {insight.officialSources.map((source) => (
                   <p key={source}>
                     <a href={source} target="_blank" rel="noreferrer">
@@ -997,10 +992,7 @@ function DiagnosticPanel({ insights }) {
           ))}
         </div>
       ) : (
-        <p className="muted">
-          No diagnostic rule matched strongly enough yet. That is expected on calmer or
-          inconclusive sections.
-        </p>
+        <p className="muted">{t("diagnostics.empty")}</p>
       )}
     </aside>
   );
@@ -1015,8 +1007,11 @@ export function App() {
   const [loadErrors, setLoadErrors] = useState([]);
   const [syncNoticeVisible, setSyncNoticeVisible] = useState(false);
   const flights = useAppStore((state) => state.flights);
+  const locale = useAppStore((state) => state.locale);
   const selectedFlight = useSelectedFlight();
-  const preparedFlight = useMemo(() => prepareFlight(selectedFlight), [selectedFlight]);
+  const setLocale = useAppStore((state) => state.setLocale);
+  const t = (key, params) => translate(locale, key, params);
+  const preparedFlight = useMemo(() => prepareFlight(selectedFlight, locale), [selectedFlight, locale]);
   const compareSession = useAppStore((state) => state.compareSession);
   const overlayState = useAppStore((state) => state.overlayState);
   const currentTimeUs = useAppStore((state) => state.currentTimeUs);
@@ -1048,10 +1043,10 @@ export function App() {
     return getFlightSnapshot(preparedFlight, currentTimeUs);
   }, [preparedFlight, currentTimeUs]);
 
-  const overlaySummary = snapshot ? getFlightStatusSummary(snapshot) : null;
+  const overlaySummary = snapshot ? getFlightStatusSummary(snapshot, locale) : null;
   const diagnosticInsights = useMemo(
-    () => (preparedFlight ? evaluateDiagnosticRules(preparedFlight) : []),
-    [preparedFlight]
+    () => (preparedFlight ? evaluateDiagnosticRules(preparedFlight, locale) : []),
+    [preparedFlight, locale]
   );
 
   const stickTrail = useMemo(() => {
@@ -1128,7 +1123,7 @@ export function App() {
 
     setVideoSyncMeta(session.id, {
       detectionStatus: "running",
-      detectionMessage: "Scanning DVR for ARMED... Press Esc to cancel.",
+      detectionMessage: t("syncNotice.scanningMessage"),
     });
 
     try {
@@ -1140,7 +1135,7 @@ export function App() {
       if (!detected) {
         setVideoSyncMeta(session.id, {
           detectionStatus: "failed",
-          detectionMessage: "ARMED text was not detected in the first 10 seconds.",
+          detectionMessage: t("syncNotice.notDetected"),
         });
         return;
       }
@@ -1150,9 +1145,10 @@ export function App() {
           detectionStatus: "failed",
           confidence: detected.confidence,
           armedVideoTimeSeconds: detected.timeSeconds,
-          detectionMessage: `Rejected low-confidence ARMED candidate at ${detected.timeSeconds.toFixed(
-            2
-          )}s (OCR ${detected.confidence.toFixed(0)}%). Adjust offset manually.`,
+          detectionMessage: t("syncNotice.rejectedCandidate", {
+            time: detected.timeSeconds.toFixed(2),
+            confidence: detected.confidence.toFixed(0),
+          }),
         });
         return;
       }
@@ -1169,22 +1165,23 @@ export function App() {
         armedVideoTimeSeconds: detected.timeSeconds,
         armedLogTimeUs: firstArmedTimeUs,
         confidence: detected.confidence,
-        detectionMessage: `ARMED detected at ${detected.timeSeconds.toFixed(
-          2
-        )}s (OCR ${detected.confidence.toFixed(0)}%)`,
+        detectionMessage: t("syncNotice.detectedAt", {
+          time: detected.timeSeconds.toFixed(2),
+          confidence: detected.confidence.toFixed(0),
+        }),
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         setVideoSyncMeta(session.id, {
           detectionStatus: "cancelled",
-          detectionMessage: "Auto sync cancelled.",
+          detectionMessage: t("timeline.autoSyncCancelled"),
         });
         return;
       }
       setVideoSyncMeta(session.id, {
         detectionStatus: "failed",
         detectionMessage:
-          error instanceof Error ? error.message : "Auto sync failed.",
+          error instanceof Error ? error.message : t("timeline.autoSyncFailed"),
       });
     } finally {
       if (autoSyncAbortRef.current === abortController) {
@@ -1318,7 +1315,7 @@ export function App() {
           const result = await loadFlightSessionsFromFile(file);
 
           if (!result.sessions.length) {
-            throw new Error("No readable log section was found in this file.");
+            throw new Error(t("errors.noReadableSection"));
           }
 
           for (const flight of result.sessions) {
@@ -1328,13 +1325,19 @@ export function App() {
           if (result.unreadableSections.length) {
             setLoadErrors((current) => [
               ...current,
-              `${file.name}: skipped ${result.unreadableSections.length} unreadable section(s).`,
+              t("errors.skippedUnreadable", {
+                file: file.name,
+                count: result.unreadableSections.length,
+              }),
             ]);
           }
         } catch (error) {
           setLoadErrors((current) => [
             ...current,
-            `${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+            t("errors.fileError", {
+              file: file.name,
+              message: error instanceof Error ? error.message : String(error),
+            }),
           ]);
         }
       }
@@ -1354,7 +1357,7 @@ export function App() {
     assignVideo(selectedFlight.id, createVideoAsset(file));
     setVideoSyncMeta(selectedFlight.id, {
       detectionStatus: "idle",
-      detectionMessage: "DVR loaded. Preparing ARMED auto sync...",
+      detectionMessage: t("syncNotice.loadedPreparing"),
     });
   }
 
@@ -1406,16 +1409,12 @@ export function App() {
     return (
       <div className="empty-state">
         <div className="empty-state__hero">
-          <p className="eyebrow">Blackbox Flight Analyzer</p>
-          <h1>Video-first Blackbox analysis for DVR review.</h1>
-          <p>
-            Load one or more `.bbl` logs first. Then attach a DVR clip to the selected
-            flight and start reviewing sticks, tracking error, motor headroom, events,
-            and A/B comparisons.
-          </p>
+          <p className="eyebrow">{t("app.emptyEyebrow")}</p>
+          <h1>{t("app.emptyTitle")}</h1>
+          <p>{t("app.emptyBody")}</p>
           <div className="toolbar">
             <label className="file-button">
-              Open logs
+              {t("app.openLogs")}
               <input
                 type="file"
                 accept=".bbl,.txt,.cfl,.bfl,.log"
@@ -1424,7 +1423,7 @@ export function App() {
               />
             </label>
           </div>
-          {busy ? <p className="muted">Loading logs...</p> : null}
+          {busy ? <p className="muted">{t("common.loading")}</p> : null}
           {loadErrors.map((error) => (
             <p key={error} className="muted">
               {error}
@@ -1442,25 +1441,25 @@ export function App() {
     preparedFlight.video &&
     ["running", "done", "failed", "cancelled"].includes(sync.detectionStatus ?? "");
   const overlayControls = [
-    { key: "topBarVisible", label: "Top" },
-    { key: "summaryVisible", label: "Summary" },
-    { key: "attitudeVisible", label: "Attitude" },
-    { key: "stickOverlayVisible", label: "Sticks" },
-    { key: "bottomMetricsVisible", label: "Bottom" },
-    { key: "historyOpen", label: "History" },
-    { key: "compareOpen", label: "Compare" },
+    { key: "topBarVisible", label: t("app.top") },
+    { key: "summaryVisible", label: t("app.summary") },
+    { key: "attitudeVisible", label: t("app.attitude") },
+    { key: "stickOverlayVisible", label: t("app.sticks") },
+    { key: "bottomMetricsVisible", label: t("app.bottom") },
+    { key: "historyOpen", label: t("app.history") },
+    { key: "compareOpen", label: t("app.compare") },
   ];
 
   return (
     <div className="shell">
       <header className="topbar">
         <div>
-          <p className="eyebrow">Blackbox Flight Analyzer MVP</p>
-          <h1>Video-led review with event-based comparison.</h1>
+          <p className="eyebrow">{t("app.eyebrow")}</p>
+          <h1>{t("app.title")}</h1>
         </div>
         <div className="toolbar">
           <label className="file-button">
-            Add logs
+            {t("app.addLogs")}
             <input
               type="file"
               accept=".bbl,.txt,.cfl,.bfl,.log"
@@ -1469,7 +1468,7 @@ export function App() {
             />
           </label>
           <label className="file-button file-button--ghost">
-            Attach DVR
+            {t("app.attachDvr")}
             <input
               type="file"
               accept=".mp4,.mov,.avi,.mpeg,.webm"
@@ -1477,7 +1476,7 @@ export function App() {
             />
           </label>
           <button className="transport" type="button" onClick={() => setPlayback(!playback.isPlaying)}>
-            {playback.isPlaying ? "Pause" : "Play"}
+            {playback.isPlaying ? t("app.pause") : t("app.play")}
           </button>
           <button
             className="transport"
@@ -1485,10 +1484,24 @@ export function App() {
             onClick={() => void runAutoSyncArmed(preparedFlight)}
             disabled={!preparedFlight.video || firstArmedTimeUs === null}
           >
-            Auto sync ARMED
+            {t("app.autoSyncArmed")}
           </button>
+          <label className="rate-select-wrap">
+            <span className="rate-slider__label">{t("locale.label")}</span>
+            <select
+              className="rate-select"
+              value={locale}
+              onChange={(event) => setLocale(event.target.value)}
+            >
+              {SUPPORTED_LOCALES.map((option) => (
+                <option key={option} value={option}>
+                  {t(`locale.${option}`)}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="rate-slider">
-            <span className="rate-slider__label">Playback</span>
+            <span className="rate-slider__label">{t("app.playback")}</span>
             <div className="rate-slider__control">
               <input
                 className="rate-slider__range"
@@ -1513,7 +1526,7 @@ export function App() {
               setStickMiniGraphEnabled(!overlayState.stickMiniGraphEnabled)
             }
           >
-            Stick graphs {overlayState.stickMiniGraphEnabled ? "On" : "Off"}
+            {t("app.stickGraphs")} {overlayState.stickMiniGraphEnabled ? t("common.on") : t("common.off")}
           </button>
           <select
             className="rate-select"
@@ -1534,19 +1547,21 @@ export function App() {
           </p>
         ))}
         <div className="toolbar toolbar--secondary">
-          <span className="toolbar__label">View</span>
+          <span className="toolbar__label">{t("common.view")}</span>
           {overlayControls.map((control) => (
             <OverlayToggleButton
               key={control.key}
               label={control.label}
               active={overlayState[control.key]}
+              onLabel={t("common.on")}
+              offLabel={t("common.off")}
               onClick={() =>
                 setOverlayVisibility(control.key, !overlayState[control.key])
               }
             />
           ))}
           <button className="transport transport--ghost" type="button" onClick={resetOverlayVisibility}>
-            Reset view
+            {t("common.resetView")}
           </button>
         </div>
       </header>
@@ -1600,8 +1615,8 @@ export function App() {
               />
             ) : (
               <div className="viewer__placeholder">
-                <p>No DVR attached to this flight.</p>
-                <span>Attach a video to overlay sticks and flight-state OSD on top.</span>
+                <p>{t("app.noDvr")}</p>
+                <span>{t("app.noDvrHelp")}</span>
               </div>
             )}
             <div className="viewer__scrim" />
@@ -1618,20 +1633,20 @@ export function App() {
                         : "running"
                   }`}
                 >
-                  <span className="sync-notice__eyebrow">Auto sync</span>
+                  <span className="sync-notice__eyebrow">{t("syncNotice.eyebrow")}</span>
                   <strong className="sync-notice__title">
                     {sync.detectionStatus === "running"
-                      ? "Scanning DVR..."
+                      ? t("syncNotice.scanningTitle")
                       : sync.detectionStatus === "done"
-                        ? "Sync OK"
+                        ? t("syncNotice.successTitle")
                         : sync.detectionStatus === "cancelled"
-                          ? "Sync cancelled"
-                        : "Sync failed"}
+                          ? t("syncNotice.cancelledTitle")
+                        : t("syncNotice.failedTitle")}
                   </strong>
                   <p className="sync-notice__message">
                     {sync.detectionStatus === "running"
-                      ? "Looking for ARMED in the DVR. Press Esc to cancel."
-                      : sync.detectionMessage ?? "Auto sync finished."}
+                      ? t("syncNotice.scanningMessage")
+                      : sync.detectionMessage ?? t("syncNotice.fallback")}
                   </p>
                 </div>
               </div>
@@ -1641,18 +1656,18 @@ export function App() {
                 {overlayState.topBarVisible ? (
                   <div className="overlay overlay--top">
                     <StatusPill
-                      label="ARM"
-                      value={snapshot.mode.armed ? "Armed" : "Disarmed"}
+                      label={t("overlay.arm")}
+                      value={snapshot.mode.armed ? t("overlay.armed") : t("overlay.disarmed")}
                       accent={snapshot.mode.armed ? "good" : "warning"}
                       compact
                     />
                     <StatusPill
-                      label="Mode"
+                      label={t("overlay.mode")}
                       value={snapshot.mode.names.slice(0, 3).join(", ") || "Acro"}
                       compact
                     />
-                    <StatusPill label="Throttle" value={overlaySummary.throttleBand} compact />
-                    <StatusPill label="Offset" value={`${(sync.offsetSeconds ?? 0).toFixed(2)}s`} compact />
+                    <StatusPill label={t("overlay.throttle")} value={overlaySummary.throttleBand} compact />
+                    <StatusPill label={t("overlay.offset")} value={`${(sync.offsetSeconds ?? 0).toFixed(2)}s`} compact />
                   </div>
                 ) : null}
                 {overlayState.summaryVisible ? (
@@ -1661,29 +1676,48 @@ export function App() {
                       snapshot={snapshot}
                       samples={metricsWindow?.samples ?? []}
                       currentTimeUs={currentTimeUs}
+                      t={t}
+                      locale={locale}
                     />
                     <ErrorTrendCard
                       snapshot={snapshot}
                       samples={metricsWindow?.samples ?? []}
                       currentTimeUs={currentTimeUs}
+                      t={t}
+                      locale={locale}
                     />
                   </div>
                 ) : null}
                 {overlayState.attitudeVisible ? (
                   <div className="overlay overlay--attitude">
-                    <AttitudeIndicator attitude={snapshot.attitude} />
+                    <AttitudeIndicator
+                      attitude={snapshot.attitude}
+                      labels={{
+                        title: t("overlay.attitude"),
+                        front: t("overlay.front"),
+                        rear: t("overlay.rear"),
+                        roll: "R",
+                        pitch: "P",
+                        yaw: "Y",
+                      }}
+                    />
                   </div>
                 ) : null}
                 {overlayState.stickOverlayVisible ? (
                   <>
                     <div className="overlay overlay--sticks overlay--sticks-left">
                       <StickOverlay
-                        title="Throttle / Yaw"
+                        title={t("overlay.throttleYaw")}
                         xValue={mapStickAxis(snapshot.rc.yaw)}
                         yValue={mapThrottleAxis(snapshot.rc.throttle)}
                         xLabel={`Yaw rc ${formatMaybeValue(snapshot.rc.yaw, 0)} / sp ${formatMaybeValue(snapshot.setpoint.yaw, 0)}`}
                         yLabel={`Thr rc ${formatMaybeValue(snapshot.rc.throttle, 0)} / raw ${formatMaybeValue(snapshot.rcRaw.throttle, 0, "%")}`}
                         trail={stickTrail.left}
+                        legendLabels={{
+                          rc: t("overlay.rc"),
+                          raw: t("overlay.raw"),
+                          setpoint: t("overlay.setpoint"),
+                        }}
                         rawPoint={
                           snapshot.rcRaw.yaw !== null && snapshot.rcRaw.throttle !== null
                             ? {
@@ -1724,6 +1758,10 @@ export function App() {
                                   legendLabel: "Yaw",
                                 },
                               ]}
+                              legendLabels={{
+                                throttle: "Thr",
+                                yaw: "Yaw",
+                              }}
                             />
                           ) : null
                         }
@@ -1731,12 +1769,17 @@ export function App() {
                     </div>
                     <div className="overlay overlay--sticks overlay--sticks-right">
                       <StickOverlay
-                        title="Roll / Pitch"
+                        title={t("overlay.rollPitch")}
                         xValue={mapStickAxis(snapshot.rc.roll)}
                         yValue={mapStickAxis(negateMaybe(snapshot.rc.pitch))}
                         xLabel={`Roll rc ${formatMaybeValue(snapshot.rc.roll, 0)} / sp ${formatMaybeValue(snapshot.setpoint.roll, 0)}`}
                         yLabel={`Pitch rc ${formatMaybeValue(snapshot.rc.pitch, 0)} / sp ${formatMaybeValue(snapshot.setpoint.pitch, 0)}`}
                         trail={stickTrail.right}
+                        legendLabels={{
+                          rc: t("overlay.rc"),
+                          raw: t("overlay.raw"),
+                          setpoint: t("overlay.setpoint"),
+                        }}
                         rawPoint={
                           snapshot.rcRaw.roll !== null && snapshot.rcRaw.pitch !== null
                             ? {
@@ -1777,6 +1820,10 @@ export function App() {
                                   legendLabel: "Pitch",
                                 },
                               ]}
+                              legendLabels={{
+                                roll: "Roll",
+                                pitch: "Pitch",
+                              }}
                             />
                           ) : null
                         }
@@ -1790,12 +1837,19 @@ export function App() {
                       motors={snapshot.motors}
                       spread={motorStats?.spread}
                       saturation={overlaySummary.saturation}
+                      t={t}
                     />
                     {snapshot.aux.slice(0, 3).map((aux) => (
                       <StatusPill
                         key={aux.label}
                         label={aux.label}
-                        value={aux.active === null ? "n/a" : aux.active ? "High" : "Low"}
+                        value={
+                          aux.active === null
+                            ? t("common.na")
+                            : aux.active
+                              ? t("common.high")
+                              : t("common.low")
+                        }
                       />
                     ))}
                   </div>
@@ -1820,7 +1874,7 @@ export function App() {
             />
             <div className="timeline__controls">
               <label>
-                Video offset
+                {t("timeline.videoOffset")}
                 <input
                   type="number"
                   step="0.05"
@@ -1829,35 +1883,43 @@ export function App() {
                 />
               </label>
               <label>
-                Auto sync
+                {t("timeline.autoSync")}
                 <div className="timeline__sync-status">
                   {sync.detectionStatus === "running"
-                    ? "Scanning in viewer... Press Esc to cancel."
+                    ? t("timeline.scanningViewer")
                     : sync.detectionStatus === "done"
-                      ? `OK: ${sync.detectionMessage ?? "Auto sync finished."}`
+                      ? t("timeline.syncOk", {
+                          message: sync.detectionMessage ?? t("timeline.autoSyncFinished"),
+                        })
                       : sync.detectionStatus === "cancelled"
-                        ? `Cancelled: ${sync.detectionMessage ?? "Auto sync cancelled."}`
-                      : sync.detectionStatus === "failed"
-                        ? `NG: ${sync.detectionMessage ?? "Auto sync failed."}`
-                        : sync.detectionMessage ?? "Not run"}
+                        ? t("timeline.syncCancelled", {
+                            message: sync.detectionMessage ?? t("timeline.autoSyncCancelled"),
+                          })
+                        : sync.detectionStatus === "failed"
+                        ? t("timeline.syncFailed", {
+                            message: sync.detectionMessage ?? t("timeline.autoSyncFailed"),
+                          })
+                        : sync.detectionMessage ?? t("timeline.notRun")}
                 </div>
               </label>
             </div>
           </div>
           {overlayState.historyOpen ? (
-            <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} />
+            <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} t={t} />
           ) : null}
         </section>
 
         <section className="sidecar">
-          <DiagnosticPanel insights={diagnosticInsights} />
-          <EventList events={preparedFlight.events} onSelect={setCurrentTimeUs} />
+          <DiagnosticPanel insights={diagnosticInsights} t={t} />
+          <EventList events={preparedFlight.events} onSelect={setCurrentTimeUs} t={t} />
           {overlayState.compareOpen ? (
             <ComparePanel
               flights={flights}
               compareSession={compareSession}
               onFlightChange={setCompareFlight}
               onEventTypeChange={setCompareEventType}
+              locale={locale}
+              t={t}
             />
           ) : null}
         </section>
