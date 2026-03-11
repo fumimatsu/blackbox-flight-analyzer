@@ -24,7 +24,9 @@ import {
   detectArmedOverlayTime,
 } from "../domain/sync/autoVideoSync.js";
 import { evaluateDiagnosticRules } from "../domain/analysis/diagnosticRules.js";
+import { getFlightSetupSummary } from "../domain/blackbox/setup/flightSetupSummary.js";
 import { SUPPORTED_LOCALES, translate } from "../i18n/index.js";
+import { SetupSummaryPanel } from "./SetupSummaryPanel.jsx";
 
 const OVERLAY_SAMPLE_INTERVAL_US = 25000;
 const MIN_PLAYBACK_RATE = 0.25;
@@ -1215,6 +1217,10 @@ export function App() {
     () => (preparedFlight ? evaluateDiagnosticRules(preparedFlight, locale) : []),
     [preparedFlight, locale]
   );
+  const setupSummary = useMemo(
+    () => (preparedFlight ? getFlightSetupSummary(preparedFlight) : null),
+    [preparedFlight]
+  );
 
   const trailSamples = useMemo(() => {
     if (!preparedFlight || !snapshot) {
@@ -2009,6 +2015,7 @@ export function App() {
               </label>
             </div>
           </div>
+          <SetupSummaryPanel summary={setupSummary} t={t} />
           {overlayState.historyOpen ? (
             <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} t={t} />
           ) : null}

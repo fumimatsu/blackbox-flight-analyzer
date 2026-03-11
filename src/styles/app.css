@@ -1199,7 +1199,8 @@ input {
 .timeline,
 .history,
 .event-list,
-.compare-panel {
+.compare-panel,
+.setup-summary {
   margin-top: 16px;
   padding: 18px;
 }
@@ -1335,6 +1336,123 @@ input {
   border: 1px solid var(--line);
   border-radius: 22px;
   background: rgba(7, 11, 16, 0.86);
+}
+
+.setup-summary {
+  border: 1px solid var(--line);
+  border-radius: 22px;
+  background: rgba(7, 11, 16, 0.78);
+  min-width: 0;
+}
+
+.setup-summary__header,
+.setup-summary__card-header,
+.setup-summary__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.setup-summary__header {
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.setup-summary__header h3 {
+  margin: 2px 0 0;
+  font-size: 18px;
+}
+
+.setup-summary__eyebrow {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.setup-summary__firmware {
+  min-width: min(240px, 100%);
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 4px;
+}
+
+.setup-summary__firmware span {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.setup-summary__firmware strong {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.setup-summary__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  min-width: 0;
+}
+
+.setup-summary__card {
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--panel-strong);
+  backdrop-filter: blur(10px);
+}
+
+.setup-summary__card-header {
+  margin-bottom: 10px;
+}
+
+.setup-summary__card-header h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.setup-summary__card-header span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.setup-summary__list {
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.setup-summary__item {
+  min-width: 0;
+}
+
+.setup-summary__item dt,
+.setup-summary__item dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.setup-summary__item dt {
+  color: var(--muted);
+}
+
+.setup-summary__item dd {
+  max-width: 55%;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .timeline__meta,
