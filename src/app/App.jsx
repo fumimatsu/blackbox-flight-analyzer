@@ -57,6 +57,19 @@ function signed(value, digits = 1) {
   return `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
 }
 
+function formatCompareValue(metric, value) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "n/a";
+  }
+  if (metric.unit === "%") {
+    return `${value.toFixed(1)}%`;
+  }
+  if (metric.unit) {
+    return `${value.toFixed(1)}${metric.unit}`;
+  }
+  return value.toFixed(1);
+}
+
 function clampPercent(value) {
   return Math.max(0, Math.min(100, value));
 }
@@ -911,15 +924,48 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
       </div>
       {summary ? (
         <div className="compare-panel__metrics">
+          <div className="compare-metric compare-metric--context">
+            <span>Scope</span>
+            <strong>{summary.scopeLabel}</strong>
+            <p>
+              A {summary.coverage.a.sampleCount} samples /{" "}
+              {summary.coverage.a.durationSeconds.toFixed(2)}s
+              {compareSession.selectedEventType
+                ? ` / ${summary.coverage.a.eventCount} events`
+                : ""}
+            </p>
+            <p>
+              B {summary.coverage.b.sampleCount} samples /{" "}
+              {summary.coverage.b.durationSeconds.toFixed(2)}s
+              {compareSession.selectedEventType
+                ? ` / ${summary.coverage.b.eventCount} events`
+                : ""}
+            </p>
+          </div>
           {summary.metrics.map((metric) => (
             <div key={metric.label} className="compare-metric">
               <span>{metric.label}</span>
               <strong>
-                A {metric.a.toFixed(1)} / B {metric.b.toFixed(1)}
+                A {formatCompareValue(metric, metric.a)} / B{" "}
+                {formatCompareValue(metric, metric.b)}
               </strong>
-              <em>{signed(metric.delta, 1)}</em>
+              <em>
+                {signed(metric.delta, 1)}
+                {metric.unit}
+                {" · "}
+                {metric.smallerIsBetter ? "Lower is better" : "Higher is better"}
+              </em>
+              <p>{metric.meaning}</p>
             </div>
           ))}
+          {summary.notes.length ? (
+            <div className="compare-metric compare-metric--notes">
+              <span>Limits</span>
+              {summary.notes.map((note) => (
+                <p key={note}>{note}</p>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : (
         <p className="muted">Load two logs to enable A/B summaries.</p>

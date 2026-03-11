@@ -1377,9 +1377,29 @@ option:hover {
   gap: 6px;
 }
 
+.compare-metric strong,
+.compare-metric p,
+.compare-metric em {
+  margin: 0;
+}
+
 .compare-metric em {
   color: var(--accent);
   font-style: normal;
+}
+
+.compare-metric p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.compare-metric--context strong {
+  font-size: 16px;
+}
+
+.compare-metric--notes {
+  border-style: dashed;
 }
 
 @media (max-width: 1100px) {
