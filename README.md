@@ -26,3 +26,4 @@ This project does not aim to repackage an existing Blackbox viewer UI. The reusa
 - This repo is the standalone continuation of the React-first MVP.
 - Third-party derived log/runtime code is intentionally isolated behind `src/domain/blackbox/adapter`.
 - Licensing and attribution details are documented in `NOTICE.md` and `LICENSE`.
+- A single `.BBL` may surface as multiple selectable flight tabs when it contains multiple readable log sections.
