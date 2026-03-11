@@ -449,8 +449,9 @@ input {
   left: 12px;
   right: auto;
   flex-direction: row;
-  flex-wrap: wrap;
-  width: min(380px, calc(100% - 24px));
+  flex-wrap: nowrap;
+  align-items: flex-start;
+  width: min(392px, calc(100% - 24px));
 }
 
 .overlay--attitude {
