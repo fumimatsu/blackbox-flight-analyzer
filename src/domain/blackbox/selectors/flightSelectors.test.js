@@ -1,4 +1,5 @@
-import fs from "node:fs/promises";
+import fs from "node:fs";
+import fsPromises from "node:fs/promises";
 import path from "node:path";
 import { beforeAll, describe, expect, it } from "vitest";
 import { loadFlightSessionFromFile } from "../adapter/flightLogAdapter.js";
@@ -14,13 +15,13 @@ const FIXTURE_PATH = path.resolve(
 );
 
 async function createFixtureFile() {
-  const bytes = await fs.readFile(FIXTURE_PATH);
+  const bytes = await fsPromises.readFile(FIXTURE_PATH);
   return new File([bytes], path.basename(FIXTURE_PATH), {
     type: "application/octet-stream",
   });
 }
 
-describe("flightSelectors baseline fixture", () => {
+describe.runIf(fs.existsSync(FIXTURE_PATH))("flightSelectors baseline fixture", () => {
   let session;
 
   beforeAll(async () => {
