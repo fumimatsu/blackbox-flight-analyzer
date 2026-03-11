@@ -22,6 +22,15 @@ export const useAppStore = create((set) => ({
     alignment: "time",
     selectedEventType: null,
   },
+  exportState: {
+    status: "idle",
+    progress: 0,
+    message: "",
+    downloadUrl: null,
+    mimeType: null,
+    hadAudio: false,
+    warnings: [],
+  },
   overlayState: {
     compareOpen: true,
     historyOpen: true,
@@ -142,6 +151,27 @@ export const useAppStore = create((set) => ({
       compareSession: {
         ...state.compareSession,
         selectedEventType,
+      },
+    }));
+  },
+  setExportState(patch) {
+    set((state) => ({
+      exportState: {
+        ...state.exportState,
+        ...patch,
+      },
+    }));
+  },
+  resetExportState() {
+    set(() => ({
+      exportState: {
+        status: "idle",
+        progress: 0,
+        message: "",
+        downloadUrl: null,
+        mimeType: null,
+        hadAudio: false,
+        warnings: [],
       },
     }));
   },

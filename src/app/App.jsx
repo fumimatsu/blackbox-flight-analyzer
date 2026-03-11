@@ -28,6 +28,10 @@ import {
 import { evaluateDiagnosticRules } from "../domain/analysis/diagnosticRules.js";
 import { getStickIntentReviewSummary } from "../domain/analysis/stickIntentReview.js";
 import { getFlightSetupSummary } from "../domain/blackbox/setup/flightSetupSummary.js";
+import {
+  createReviewVideoExporter,
+  getReviewVideoExportSupport,
+} from "../domain/export/reviewVideoExport.js";
 import { SUPPORTED_LOCALES, translate } from "../i18n/index.js";
 import { SetupSummaryPanel } from "./SetupSummaryPanel.jsx";
 import { StickIntentPanel } from "./StickIntentPanel.jsx";
@@ -586,6 +590,254 @@ function AttitudeIndicator({ attitude, labels }) {
       </div>
     </div>
   );
+}
+
+function drawRoundedRect(context, x, y, width, height, radius, fillStyle, strokeStyle = null) {
+  context.beginPath();
+  context.moveTo(x + radius, y);
+  context.arcTo(x + width, y, x + width, y + height, radius);
+  context.arcTo(x + width, y + height, x, y + height, radius);
+  context.arcTo(x, y + height, x, y, radius);
+  context.arcTo(x, y, x + width, y, radius);
+  context.closePath();
+  context.fillStyle = fillStyle;
+  context.fill();
+  if (strokeStyle) {
+    context.strokeStyle = strokeStyle;
+    context.stroke();
+  }
+}
+
+function drawOverlayCardTitle(context, title, x, y) {
+  context.fillStyle = "rgba(214, 221, 226, 0.82)";
+  context.font = "12px Segoe UI";
+  context.textBaseline = "top";
+  context.fillText(title, x, y);
+}
+
+function drawStatusCard(context, x, y, label, value, accent = "#d6dde2") {
+  drawRoundedRect(context, x, y, 100, 48, 14, "rgba(5, 10, 14, 0.72)", "rgba(255,255,255,0.08)");
+  context.textBaseline = "top";
+  context.fillStyle = "rgba(149, 174, 181, 0.95)";
+  context.font = "11px Segoe UI";
+  context.fillText(label, x + 12, y + 10);
+  context.fillStyle = accent;
+  context.font = "bold 15px Segoe UI";
+  context.fillText(value, x + 12, y + 24);
+}
+
+function drawStickCardCanvas(context, x, y, config, legendLabels) {
+  const width = 150;
+  const height = 188;
+  drawRoundedRect(context, x, y, width, height, 18, "rgba(5,10,14,0.72)", "rgba(255,255,255,0.08)");
+  drawOverlayCardTitle(context, config.title, x + 14, y + 12);
+
+  const arenaX = x + 18;
+  const arenaY = y + 34;
+  const arenaSize = 102;
+  drawRoundedRect(
+    context,
+    arenaX,
+    arenaY,
+    arenaSize,
+    arenaSize,
+    18,
+    "rgba(255,255,255,0.025)",
+    "rgba(255,255,255,0.1)"
+  );
+  context.strokeStyle = "rgba(255,255,255,0.09)";
+  context.beginPath();
+  context.moveTo(arenaX + 10, arenaY + arenaSize / 2);
+  context.lineTo(arenaX + arenaSize - 10, arenaY + arenaSize / 2);
+  context.moveTo(arenaX + arenaSize / 2, arenaY + 10);
+  context.lineTo(arenaX + arenaSize / 2, arenaY + arenaSize - 10);
+  context.stroke();
+
+  for (const point of config.trail) {
+    context.fillStyle = "rgba(255,255,255,0.45)";
+    context.beginPath();
+    context.arc(arenaX + (point.x / 100) * arenaSize, arenaY + (point.y / 100) * arenaSize, 3.8, 0, Math.PI * 2);
+    context.fill();
+  }
+
+  if (config.setpointPoint) {
+    context.strokeStyle = "#98beff";
+    context.lineWidth = 3;
+    context.beginPath();
+    context.arc(
+      arenaX + (config.setpointPoint.x / 100) * arenaSize,
+      arenaY + (config.setpointPoint.y / 100) * arenaSize,
+      8,
+      0,
+      Math.PI * 2
+    );
+    context.stroke();
+  }
+
+  if (config.rawPoint) {
+    context.strokeStyle = "#ffbb70";
+    context.lineWidth = 2;
+    context.beginPath();
+    context.arc(
+      arenaX + (config.rawPoint.x / 100) * arenaSize,
+      arenaY + (config.rawPoint.y / 100) * arenaSize,
+      8.5,
+      0,
+      Math.PI * 2
+    );
+    context.stroke();
+  }
+
+  const dotX = arenaX + (config.xValue / 100) * arenaSize;
+  const dotY = arenaY + (config.yValue / 100) * arenaSize;
+  context.fillStyle = "#7df2c5";
+  context.fillRect(dotX - 8, dotY - 2, 16, 4);
+  context.fillRect(dotX - 2, dotY - 8, 4, 16);
+
+  context.fillStyle = "#eff9fb";
+  context.font = "11px Segoe UI";
+  context.fillText(config.xLabel, x + 14, y + 144);
+  context.fillText(config.yLabel, x + 14, y + 160);
+
+  const legend = [
+    { label: legendLabels.rc, color: "#7df2c5" },
+    { label: legendLabels.raw, color: "#ffbb70" },
+    { label: legendLabels.setpoint, color: "#98beff" },
+  ];
+  let legendX = x + 14;
+  for (const item of legend) {
+    context.fillStyle = item.color;
+    context.beginPath();
+    context.arc(legendX + 4, y + 176, 4, 0, Math.PI * 2);
+    context.fill();
+    context.fillStyle = "rgba(214,221,226,0.82)";
+    context.fillText(item.label, legendX + 12, y + 170);
+    legendX += item.label.length * 6 + 28;
+  }
+}
+
+function drawAttitudeCardCanvas(context, x, y, snapshot, t) {
+  drawRoundedRect(context, x, y, 138, 162, 18, "rgba(5,10,14,0.72)", "rgba(255,255,255,0.08)");
+  drawOverlayCardTitle(context, t("overlay.attitude"), x + 12, y + 12);
+  const yaw = normalizeHeadingDegrees(snapshot?.attitude?.yaw ?? 0) ?? 0;
+  context.fillStyle = "#eff9fb";
+  context.font = "bold 15px Segoe UI";
+  context.fillText(`${formatMaybeValue(yaw, 0, "°")}`, x + 96, y + 12);
+  const cx = x + 69;
+  const cy = y + 92;
+  context.strokeStyle = "rgba(255,255,255,0.08)";
+  context.beginPath();
+  context.arc(cx, cy, 42, 0, Math.PI * 2);
+  context.stroke();
+  context.save();
+  context.translate(cx, cy);
+  context.rotate((yaw * Math.PI) / 180);
+  context.strokeStyle = "rgba(125, 242, 197, 0.85)";
+  context.lineWidth = 5;
+  context.beginPath();
+  context.moveTo(-28, -28);
+  context.lineTo(28, 28);
+  context.moveTo(28, -28);
+  context.lineTo(-28, 28);
+  context.stroke();
+  context.fillStyle = "#e7fff6";
+  context.beginPath();
+  context.arc(0, 0, 13, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawMotorCardCanvas(context, x, y, snapshot, motorStats, overlaySummary, t) {
+  drawRoundedRect(context, x, y, 166, 150, 18, "rgba(5,10,14,0.72)", "rgba(255,255,255,0.08)");
+  drawOverlayCardTitle(context, t("overlay.motors"), x + 12, y + 12);
+  context.fillStyle = "#eff9fb";
+  context.font = "bold 24px Segoe UI";
+  context.fillText(percent(motorStats?.max ?? null), x + 104, y + 12);
+  context.fillStyle = "rgba(149, 174, 181, 0.95)";
+  context.font = "11px Segoe UI";
+  context.fillText(
+    overlaySummary?.saturation ? t("overlay.headroomLow") : t("overlay.headroomOk"),
+    x + 88,
+    y + 40
+  );
+  snapshot.motors.slice(0, 4).forEach((value, index) => {
+    const barX = x + 14 + index * 38;
+    const barHeight = 58;
+    drawRoundedRect(context, barX, y + 64, 14, barHeight, 7, "rgba(255,255,255,0.06)", "rgba(255,255,255,0.08)");
+    const fillHeight = ((value ?? 0) / 100) * barHeight;
+    context.fillStyle = value === motorStats?.max ? "#98beff" : "#7df2c5";
+    drawRoundedRect(context, barX + 1, y + 64 + barHeight - fillHeight - 1, 12, fillHeight, 6, context.fillStyle);
+    context.fillStyle = "rgba(149,174,181,0.95)";
+    context.fillText(`M${index + 1}`, barX - 1, y + 52);
+  });
+}
+
+function drawSummaryCardsCanvas(context, x, y, snapshot, overlaySummary, sync, t) {
+  drawStatusCard(
+    context,
+    x,
+    y,
+    t("overlay.arm"),
+    snapshot.mode.armed ? t("overlay.armed") : t("overlay.disarmed"),
+    snapshot.mode.armed ? "#7df2c5" : "#ffbb70"
+  );
+  drawStatusCard(context, x + 110, y, t("overlay.mode"), snapshot.mode.names.slice(0, 2).join(", ") || "Acro");
+  drawStatusCard(context, x + 220, y, t("overlay.throttle"), overlaySummary.throttleBand);
+  drawStatusCard(context, x + 330, y, t("overlay.offset"), `${(sync.offsetSeconds ?? 0).toFixed(2)}s`, "#98beff");
+}
+
+function drawSummaryMetricsCanvas(context, x, y, snapshot, overlaySummary, t) {
+  const width = 188;
+  drawRoundedRect(context, x, y, width, 70, 18, "rgba(5,10,14,0.72)", "rgba(255,255,255,0.08)");
+  drawOverlayCardTitle(context, t("overlay.error"), x + 12, y + 12);
+  context.fillStyle = "#eff9fb";
+  context.font = "bold 13px Segoe UI";
+  context.fillText(`R ${formatMaybeValue(snapshot.error.roll, 1)}`, x + 12, y + 30);
+  context.fillText(`P ${formatMaybeValue(snapshot.error.pitch, 1)}`, x + 72, y + 30);
+  context.fillText(`Y ${formatMaybeValue(snapshot.error.yaw, 1)}`, x + 132, y + 30);
+  context.strokeStyle = "rgba(255,255,255,0.12)";
+  context.beginPath();
+  context.moveTo(x + 12, y + 54);
+  context.lineTo(x + width - 12, y + 54);
+  context.stroke();
+  context.fillStyle = overlaySummary.saturation ? "#ffbb70" : "#7df2c5";
+  context.font = "11px Segoe UI";
+  context.fillText(
+    overlaySummary.saturation ? t("overlay.headroomLow") : t("status.settled"),
+    x + 12,
+    y + 58
+  );
+}
+
+function drawTimecodeCanvas(context, width, height, currentTimeUs) {
+  context.textBaseline = "bottom";
+  context.textAlign = "right";
+  context.fillStyle = "#eff9fb";
+  context.font = "bold 24px Segoe UI";
+  context.fillText(formatMicroseconds(currentTimeUs), width - 24, height - 20);
+}
+
+function drawEventEmphasisCanvas(context, width, selectedEvent) {
+  if (!selectedEvent) {
+    return;
+  }
+  const boxWidth = Math.min(width - 80, 360);
+  drawRoundedRect(
+    context,
+    width / 2 - boxWidth / 2,
+    20,
+    boxWidth,
+    38,
+    19,
+    "rgba(5,10,14,0.72)",
+    "rgba(125,242,197,0.35)"
+  );
+  context.fillStyle = "#7df2c5";
+  context.font = "bold 14px Segoe UI";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.fillText(selectedEvent.summary, width / 2, 39);
+  context.textAlign = "left";
 }
 
 function thresholdY(value, minValue, maxValue, height) {
@@ -1635,14 +1887,89 @@ function DiagnosticPanel({ insights, focusLabel, focusMeta, onClearFocus, isEven
   );
 }
 
+function ExportPanel({ exportState, support, onStart, onCancel, onClose, t }) {
+  const isBusy =
+    exportState.status === "preparing" ||
+    exportState.status === "recording" ||
+    exportState.status === "finalizing";
+
+  return (
+    <aside className="export-panel">
+      <div className="compare-panel__header">
+        <h3>{t("export.title")}</h3>
+        <p>{t("export.description")}</p>
+      </div>
+      <div className="compare-panel__metrics">
+        <div className="compare-metric">
+          <span>{t("export.format")}</span>
+          <strong>WebM</strong>
+        </div>
+        <div className="compare-metric">
+          <span>{t("export.scope")}</span>
+          <strong>{t("export.fullSelectedFlight")}</strong>
+        </div>
+        <div className="compare-metric">
+          <span>{t("export.audio")}</span>
+          <strong>{t("export.bestEffort")}</strong>
+        </div>
+      </div>
+      {!support.supported ? <p className="muted">{support.reason}</p> : null}
+      <div className="export-panel__actions">
+        <button
+          className="transport"
+          type="button"
+          onClick={onStart}
+          disabled={!support.supported || isBusy}
+        >
+          {isBusy ? t("export.recording") : t("export.start")}
+        </button>
+        <button className="transport transport--ghost" type="button" onClick={onCancel} disabled={!isBusy}>
+          {t("export.cancel")}
+        </button>
+        <button className="transport transport--ghost" type="button" onClick={onClose}>
+          {t("export.close")}
+        </button>
+      </div>
+      <div className="export-panel__status">
+        <strong>{t(`export.status.${exportState.status}`)}</strong>
+        {exportState.message ? <p>{exportState.message}</p> : null}
+        {isBusy ? (
+          <div className="export-panel__progress">
+            <span style={{ width: `${Math.round((exportState.progress ?? 0) * 100)}%` }} />
+          </div>
+        ) : null}
+        {exportState.warnings?.length
+          ? exportState.warnings.map((warning) => (
+              <p key={warning} className="muted">
+                {warning}
+              </p>
+            ))
+          : null}
+        {exportState.downloadUrl ? (
+          <div className="export-panel__links">
+            <a href={exportState.downloadUrl} download="blackbox-flight-review.webm">
+              {t("export.download")}
+            </a>
+            <a href={exportState.downloadUrl} target="_blank" rel="noreferrer">
+              {t("export.open")}
+            </a>
+          </div>
+        ) : null}
+      </div>
+    </aside>
+  );
+}
+
 export function App() {
   const videoRef = useRef(null);
   const playbackFrameRef = useRef(0);
   const playbackClockRef = useRef(0);
   const autoSyncAbortRef = useRef(null);
+  const exportControllerRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [loadErrors, setLoadErrors] = useState([]);
   const [syncNoticeVisible, setSyncNoticeVisible] = useState(false);
+  const [exportPanelOpen, setExportPanelOpen] = useState(false);
   const flights = useAppStore((state) => state.flights);
   const locale = useAppStore((state) => state.locale);
   const stickMode = useAppStore((state) => state.stickMode);
@@ -1657,6 +1984,7 @@ export function App() {
   const currentTimeUs = useAppStore((state) => state.currentTimeUs);
   const playback = useAppStore((state) => state.playback);
   const videoSync = useAppStore((state) => state.videoSync);
+  const exportState = useAppStore((state) => state.exportState);
   const addFlight = useAppStore((state) => state.addFlight);
   const assignVideo = useAppStore((state) => state.assignVideo);
   const selectFlight = useAppStore((state) => state.selectFlight);
@@ -1668,6 +1996,8 @@ export function App() {
   const setCompareFlight = useAppStore((state) => state.setCompareFlight);
   const setCompareEventType = useAppStore((state) => state.setCompareEventType);
   const setVideoSyncMeta = useAppStore((state) => state.setVideoSyncMeta);
+  const setExportState = useAppStore((state) => state.setExportState);
+  const resetExportState = useAppStore((state) => state.resetExportState);
   const setStickMiniGraphEnabled = useAppStore(
     (state) => state.setStickMiniGraphEnabled
   );
@@ -1851,6 +2181,98 @@ export function App() {
     stickUsage,
     t,
   ]);
+  const exportSupport = useMemo(() => getReviewVideoExportSupport(), []);
+
+  function buildExportOverlaySnapshot(timeUs) {
+    if (!preparedFlight) {
+      return null;
+    }
+
+    const exportSnapshot = getFlightSnapshot(preparedFlight, timeUs);
+    const exportSummary = getFlightStatusSummary(exportSnapshot, locale);
+    const exportTrailWindow = getFlightWindow(
+      preparedFlight,
+      Math.max(preparedFlight.minTimeUs, timeUs - 1000000),
+      timeUs,
+      120
+    );
+    const exportTrailSamples = exportTrailWindow.samples
+      .filter((sample) => sample.timeUs < timeUs)
+      .slice(-32);
+    const exportStickUsage = stickUsage;
+
+    return {
+      snapshot: exportSnapshot,
+      summary: exportSummary,
+      leftStick: buildStickConfig(
+        exportSnapshot,
+        exportTrailSamples,
+        "left",
+        stickMode,
+        t,
+        null,
+        false,
+        timeUs,
+        exportStickUsage
+      ),
+      rightStick: buildStickConfig(
+        exportSnapshot,
+        exportTrailSamples,
+        "right",
+        stickMode,
+        t,
+        null,
+        false,
+        timeUs,
+        exportStickUsage
+      ),
+      motorStats: getMotorStats(exportSnapshot.motors),
+      overlayState,
+      sync: videoSync[preparedFlight.id] ?? { offsetSeconds: 0 },
+    };
+  }
+
+  function renderExportFrame(context, frame) {
+    const overlaySnapshot = frame.overlaySnapshot;
+    if (!overlaySnapshot?.snapshot) {
+      return;
+    }
+    const { snapshot: exportSnapshot, summary, leftStick, rightStick, motorStats, sync } =
+      overlaySnapshot;
+    const legendLabels = {
+      rc: t("overlay.rc"),
+      raw: t("overlay.raw"),
+      setpoint: t("overlay.setpoint"),
+    };
+
+    if (overlayState.topBarVisible) {
+      drawSummaryCardsCanvas(context, 22, 22, exportSnapshot, summary, sync, t);
+    }
+    if (overlayState.summaryVisible) {
+      drawSummaryMetricsCanvas(context, 22, 84, exportSnapshot, summary, t);
+    }
+    if (overlayState.stickOverlayVisible) {
+      drawStickCardCanvas(context, 22, frame.height - 218, leftStick, legendLabels);
+      drawStickCardCanvas(context, frame.width - 172, frame.height - 218, rightStick, legendLabels);
+    }
+    if (overlayState.attitudeVisible) {
+      drawAttitudeCardCanvas(context, frame.width - 162, 22, exportSnapshot, t);
+    }
+    if (overlayState.bottomMetricsVisible) {
+      drawMotorCardCanvas(
+        context,
+        frame.width - 340,
+        frame.height - 180,
+        exportSnapshot,
+        motorStats,
+        summary,
+        t
+      );
+    }
+
+    drawTimecodeCanvas(context, frame.width, frame.height, frame.currentTimeUs);
+    drawEventEmphasisCanvas(context, frame.width, frame.selectedEvent);
+  }
 
   async function runAutoSyncArmed(session = preparedFlight) {
     if (!session?.video || firstArmedTimeUs === null) {
@@ -1928,6 +2350,73 @@ export function App() {
         autoSyncAbortRef.current = null;
       }
     }
+  }
+
+  async function handleExportReviewVideo() {
+    if (!preparedFlight?.video) {
+      setExportState({
+        status: "failed",
+        progress: 0,
+        message: t("export.noVideo"),
+      });
+      setExportPanelOpen(true);
+      return;
+    }
+
+    resetExportState();
+    setExportPanelOpen(true);
+    setExportState({
+      status: "preparing",
+      progress: 0,
+      message: t("export.preparing"),
+      warnings: [],
+      downloadUrl: null,
+    });
+
+    exportControllerRef.current?.cancel?.();
+    exportControllerRef.current?.dispose?.();
+
+    const exporter = createReviewVideoExporter({
+      flight: preparedFlight,
+      video: preparedFlight.video,
+      locale,
+      overlayState,
+      syncOffsetSeconds: (videoSync[preparedFlight.id] ?? { offsetSeconds: 0 }).offsetSeconds ?? 0,
+      width: preparedFlight.video.width ?? 1280,
+      height: preparedFlight.video.height ?? 720,
+      fps: 30,
+      includeAudio: true,
+      selectedEvent: selectedReviewEvent,
+      getOverlaySnapshot: buildExportOverlaySnapshot,
+      renderFrame: renderExportFrame,
+      onState: (nextState) => setExportState(nextState),
+    });
+
+    exportControllerRef.current = exporter;
+
+    try {
+      await exporter.start();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setExportState({
+          status: "cancelled",
+          progress: 0,
+          message: t("export.cancelled"),
+        });
+      } else {
+        setExportState({
+          status: "failed",
+          progress: 0,
+          message: error instanceof Error ? error.message : t("export.failed"),
+        });
+      }
+    } finally {
+      exportControllerRef.current = exporter;
+    }
+  }
+
+  function handleCancelExport() {
+    exportControllerRef.current?.cancel?.();
   }
 
   useEffect(() => {
@@ -2142,6 +2631,8 @@ export function App() {
     return () => {
       autoSyncAbortRef.current?.abort();
       autoSyncAbortRef.current = null;
+      exportControllerRef.current?.cancel?.();
+      exportControllerRef.current?.dispose?.();
     };
   }, []);
 
@@ -2234,6 +2725,19 @@ export function App() {
           >
             {t("app.autoSyncArmed")}
           </button>
+          <button
+            className="transport"
+            type="button"
+            onClick={() => {
+              setExportPanelOpen((current) => !current);
+              if (!exportPanelOpen) {
+                resetExportState();
+              }
+            }}
+            disabled={!preparedFlight.video}
+          >
+            {t("app.exportVideo")}
+          </button>
           <label className="rate-select-wrap">
             <span className="rate-slider__label">{t("locale.label")}</span>
             <select
@@ -2311,6 +2815,16 @@ export function App() {
             {t("common.resetView")}
           </button>
         </div>
+        {exportPanelOpen ? (
+          <ExportPanel
+            exportState={exportState}
+            support={exportSupport}
+            onStart={() => void handleExportReviewVideo()}
+            onCancel={handleCancelExport}
+            onClose={() => setExportPanelOpen(false)}
+            t={t}
+          />
+        ) : null}
       </header>
 
       <section className="flight-strip">
