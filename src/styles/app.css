@@ -155,6 +155,38 @@ input {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.flight-tab__header {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.flight-tab__section {
+  min-width: 0;
+  font-size: 1rem;
+  line-height: 1.1;
+}
+
+.flight-tab__duration {
+  flex: 0 0 auto;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.flight-tab__source {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rate-slider {

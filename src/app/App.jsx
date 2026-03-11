@@ -1368,13 +1368,30 @@ export function App() {
             type="button"
             className={`flight-tab ${flight.id === preparedFlight.id ? "flight-tab--active" : ""}`}
             onClick={() => selectFlight(flight.id)}
+            title={
+              flight.totalLogSections > 1
+                ? `${flight.fileName} · ${flight.logSectionLabel}`
+                : flight.fileName
+            }
           >
-            <strong>{flight.name}</strong>
-            <span>
-              {flight.totalLogSections > 1
-                ? `${flight.logSectionLabel} · ${formatMicroseconds(flight.durationUs)}`
-                : formatMicroseconds(flight.durationUs)}
-            </span>
+            {flight.totalLogSections > 1 ? (
+              <>
+                <div className="flight-tab__header">
+                  <strong className="flight-tab__section">{flight.logSectionLabel}</strong>
+                  <span className="flight-tab__duration">
+                    {formatMicroseconds(flight.durationUs)}
+                  </span>
+                </div>
+                <span className="flight-tab__source">{flight.fileName}</span>
+              </>
+            ) : (
+              <>
+                <strong className="flight-tab__section">{flight.name}</strong>
+                <span className="flight-tab__duration">
+                  {formatMicroseconds(flight.durationUs)}
+                </span>
+              </>
+            )}
           </button>
         ))}
       </section>
