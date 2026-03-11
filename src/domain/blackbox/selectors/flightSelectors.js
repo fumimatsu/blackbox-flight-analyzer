@@ -203,18 +203,18 @@ function getRawRcValue(session, frame, axis) {
   return normalizeRawAxis(session, raw);
 }
 
-export function clampTime(session, timeUs) {
-  return Math.min(Math.max(timeUs, session.minTimeUs), session.maxTimeUs);
-}
-
-export function getFlightSnapshot(session, timeUs) {
+function getFrameAtTime(session, timeUs) {
   const clamped = clampTime(session, timeUs);
   const frameWindow = session.log.getCurrentFrameAtTime(clamped);
-  const frame = frameWindow?.current ?? session.log.getSmoothedFrameAtTime(clamped);
-  const modeNames = getModeNames(session.log, frame, session);
+  return frameWindow?.current ?? session.log.getSmoothedFrameAtTime(clamped);
+}
+
+function mapSampleFromFrame(session, frame, timeUs = null) {
+  const sampleTimeUs =
+    timeUs ?? getValue(frame, TIME_FIELD_INDEX, clampTime(session, session.minTimeUs));
 
   return {
-    timeUs: clamped,
+    timeUs: sampleTimeUs,
     rcRaw: {
       roll: getRawRcValue(session, frame, "roll"),
       pitch: getRawRcValue(session, frame, "pitch"),
@@ -231,6 +231,31 @@ export function getFlightSnapshot(session, timeUs) {
     motors: getMotorValues(session, frame),
     rpm: getRpmValues(session, frame),
     aux: getAuxChannels(session, frame),
+  };
+}
+
+function buildFixedSampleTimes(startUs, endUs, limit) {
+  if (limit <= 1 || endUs <= startUs) {
+    return [startUs];
+  }
+
+  const stepUs = (endUs - startUs) / Math.max(limit - 1, 1);
+  return Array.from({ length: limit }, (_, index) =>
+    index === limit - 1 ? endUs : Math.round(startUs + stepUs * index)
+  );
+}
+
+export function clampTime(session, timeUs) {
+  return Math.min(Math.max(timeUs, session.minTimeUs), session.maxTimeUs);
+}
+
+export function getFlightSnapshot(session, timeUs) {
+  const clamped = clampTime(session, timeUs);
+  const frame = getFrameAtTime(session, clamped);
+  const modeNames = getModeNames(session.log, frame, session);
+
+  return {
+    ...mapSampleFromFrame(session, frame, clamped),
     mode: {
       names: modeNames,
       armed: modeNames.includes("Arm"),
@@ -312,9 +337,29 @@ function downsampleFrames(frames, limit, timeFieldIndex = TIME_FIELD_INDEX) {
   return sampled;
 }
 
-export function getFlightWindow(session, startUs, endUs, limit = SAMPLE_LIMIT) {
+export function getFlightWindow(
+  session,
+  startUs,
+  endUs,
+  limit = SAMPLE_LIMIT,
+  options = {}
+) {
   const windowStart = clampTime(session, Math.min(startUs, endUs));
   const windowEnd = clampTime(session, Math.max(startUs, endUs));
+  const sampleStrategy = options.sampleStrategy ?? "frames";
+
+  if (sampleStrategy === "fixed-interval") {
+    const sampleTimes = buildFixedSampleTimes(windowStart, windowEnd, limit);
+
+    return {
+      startUs: windowStart,
+      endUs: windowEnd,
+      samples: sampleTimes.map((sampleTimeUs) =>
+        mapSampleFromFrame(session, getFrameAtTime(session, sampleTimeUs), sampleTimeUs)
+      ),
+    };
+  }
+
   const frames = downsampleFrames(
     flattenChunks(session.log.getSmoothedChunksInTimeRange(windowStart, windowEnd)),
     limit
@@ -326,24 +371,6 @@ export function getFlightWindow(session, startUs, endUs, limit = SAMPLE_LIMIT) {
   return {
     startUs: windowStart,
     endUs: windowEnd,
-    samples: frames.map((frame) => ({
-      timeUs: frame[TIME_FIELD_INDEX],
-      rcRaw: {
-        roll: getRawRcValue(session, frame, "roll"),
-        pitch: getRawRcValue(session, frame, "pitch"),
-        yaw: getRawRcValue(session, frame, "yaw"),
-        throttle: getRawRcValue(session, frame, "throttle"),
-      },
-      rc: {
-        ...mapAxisValues(session, frame, "rc"),
-        throttle: getThrottleValue(session, frame),
-      },
-      setpoint: mapAxisValues(session, frame, "setpoint"),
-      gyro: mapAxisValues(session, frame, "gyro"),
-      error: mapAxisValues(session, frame, "error"),
-      motors: getMotorValues(session, frame),
-      rpm: getRpmValues(session, frame),
-      aux: getAuxChannels(session, frame),
-    })),
+    samples: frames.map((frame) => mapSampleFromFrame(session, frame, frame[TIME_FIELD_INDEX])),
   };
 }

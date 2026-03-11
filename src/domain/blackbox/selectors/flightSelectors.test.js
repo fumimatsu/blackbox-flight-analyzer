@@ -66,4 +66,24 @@ describe("flightSelectors baseline fixture", () => {
     expect(window.samples.length).toBeLessThanOrEqual(60);
     expect(window.samples.length).toBeGreaterThan(0);
   });
+
+  it("builds a fixed-interval window with stable sample positions", () => {
+    const startUs = session.minTimeUs + 1000000;
+    const endUs = startUs + 2000000;
+    const window = getFlightWindow(session, startUs, endUs, 7, {
+      sampleStrategy: "fixed-interval",
+    });
+
+    expect(window.startUs).toBe(startUs);
+    expect(window.endUs).toBe(endUs);
+    expect(window.samples).toHaveLength(7);
+    expect(window.samples[0].timeUs).toBe(startUs);
+    expect(window.samples[window.samples.length - 1].timeUs).toBe(endUs);
+
+    for (let index = 1; index < window.samples.length; index += 1) {
+      expect(window.samples[index].timeUs).toBeGreaterThan(
+        window.samples[index - 1].timeUs
+      );
+    }
+  });
 });

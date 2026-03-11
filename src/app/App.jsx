@@ -835,7 +835,8 @@ export function App() {
       preparedFlight,
       currentTimeUs - overlayState.stickMiniGraphWindowUs,
       currentTimeUs + overlayState.stickMiniGraphWindowUs,
-      180
+      180,
+      { sampleStrategy: "fixed-interval" }
     );
   }, [preparedFlight, currentTimeUs, overlayState.stickMiniGraphWindowUs]);
 
@@ -851,7 +852,8 @@ export function App() {
       preparedFlight,
       currentTimeUs - 1000000,
       currentTimeUs + 1000000,
-      120
+      120,
+      { sampleStrategy: "fixed-interval" }
     );
   }, [preparedFlight, currentTimeUs]);
 
