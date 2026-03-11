@@ -1,63 +1,166 @@
 import { getErrorMagnitude, getFlightStatusSummary } from "../derived/flightDerived.js";
 import { EVENT_CONFIG, EVENT_TYPES } from "./eventConfig.js";
 
-function finalizeSegment(events, type, config, start, end, samples) {
-  if (start === null || end === null) {
+function axisPeak(values) {
+  const numbers = values.filter((value) => value !== null && value !== undefined && !Number.isNaN(value));
+  if (!numbers.length) {
+    return null;
+  }
+  return Math.max(...numbers.map((value) => Math.abs(value)));
+}
+
+function summarizeSegment(type, samples) {
+  const config = EVENT_CONFIG[type];
+  const peakError = Math.round(
+    Math.max(...samples.map((sample) => sample.errorMagnitude ?? 0))
+  );
+  const peakThrottle = Math.round(
+    Math.max(...samples.map((sample) => sample.rc.throttle ?? 0))
+  );
+  const peakMotor = Math.round(
+    Math.max(...samples.map((sample) => sample.status.motor.max ?? 0))
+  );
+  const peakTurnInput = Math.round(
+    Math.max(...samples.map((sample) => sample.turnInput ?? 0))
+  );
+
+  switch (type) {
+    case EVENT_TYPES.HIGH_THROTTLE_STRAIGHT:
+      return {
+        summary: config.label,
+        detail: `High throttle with low stick input. Peak throttle ${peakThrottle}%`,
+      };
+    case EVENT_TYPES.CHOP_TURN:
+      return {
+        summary: config.label,
+        detail: `Throttle dropped into a turn. Peak turn input ${peakTurnInput}`,
+      };
+    case EVENT_TYPES.LOADED_ROLL_ARC:
+      return {
+        summary: config.label,
+        detail: `Sustained roll demand with throttle on. Peak throttle ${peakThrottle}%`,
+      };
+    case EVENT_TYPES.HIGH_ERROR_BURST:
+      return {
+        summary: config.label,
+        detail: `Tracking error peaked at ${peakError}°/s without saturation`,
+      };
+    case EVENT_TYPES.SATURATION_BURST:
+      return {
+        summary: config.label,
+        detail: `Motor headroom looked limited. Peak motor ${peakMotor}%`,
+      };
+    default:
+      return {
+        summary: config.label,
+        detail: config.reviewReason,
+      };
+  }
+}
+
+function finalizeSegment(events, type, startUs, endUs, samples) {
+  const config = EVENT_CONFIG[type];
+  if (startUs === null || endUs === null || !samples.length) {
     return;
   }
-  const durationUs = end - start;
+
+  const durationUs = endUs - startUs;
   if (durationUs < config.minDurationUs) {
     return;
   }
-  const severity =
-    samples.reduce((peak, sample) => Math.max(peak, sample.score ?? 0), 0) || durationUs;
+
+  const severity = samples.reduce((peak, sample) => Math.max(peak, sample.score ?? 0), 0);
+  const summary = summarizeSegment(type, samples);
 
   events.push({
-    id: `${type}-${start}`,
+    id: `${type}-${startUs}`,
     type,
-    startUs: start,
-    endUs: end,
+    startUs,
+    endUs,
     durationUs,
     severity,
-    summary: samples[samples.length - 1]?.summary ?? type,
+    priority: config.priority,
+    summary: summary.summary,
+    detail: summary.detail,
+    reviewReason: config.reviewReason,
   });
 }
 
 function segmentByPredicate(samples, type, predicate) {
   const events = [];
   const config = EVENT_CONFIG[type];
-  let currentStart = null;
+  let currentStartUs = null;
+  let currentEndUs = null;
   let currentSamples = [];
 
-  for (let index = 0; index < samples.length; index++) {
-    const sample = samples[index];
-    const matches = predicate(sample, index, samples);
+  for (const sample of samples) {
+    const matched = predicate(sample);
+    const nextSample = matched === true ? sample : matched ? { ...sample, ...matched } : null;
 
-    if (matches) {
-      currentStart ??= sample.timeUs;
-      currentSamples.push(matches === true ? sample : { ...sample, ...matches });
+    if (nextSample) {
+      currentStartUs ??= sample.timeUs;
+      currentEndUs = sample.timeUs;
+      currentSamples.push(nextSample);
       continue;
     }
 
-    if (currentStart !== null) {
-      finalizeSegment(events, type, config, currentStart, sample.timeUs, currentSamples);
-      currentStart = null;
+    if (
+      currentStartUs !== null &&
+      currentEndUs !== null &&
+      sample.timeUs - currentEndUs <= config.maxGapUs
+    ) {
+      continue;
+    }
+
+    if (currentStartUs !== null) {
+      finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples);
+      currentStartUs = null;
+      currentEndUs = null;
       currentSamples = [];
     }
   }
 
-  if (currentStart !== null && currentSamples.length) {
-    finalizeSegment(
-      events,
-      type,
-      config,
-      currentStart,
-      currentSamples[currentSamples.length - 1].timeUs,
-      currentSamples
-    );
+  if (currentStartUs !== null && currentEndUs !== null) {
+    finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples);
   }
 
   return events;
+}
+
+function overlaps(a, b) {
+  return a.startUs < b.endUs && b.startUs < a.endUs;
+}
+
+function pruneOverlappingEvents(events) {
+  const sorted = [...events].sort((left, right) => {
+    if (left.startUs !== right.startUs) {
+      return left.startUs - right.startUs;
+    }
+    if (left.priority !== right.priority) {
+      return right.priority - left.priority;
+    }
+    return right.severity - left.severity;
+  });
+
+  const kept = [];
+  for (const event of sorted) {
+    const overlapping = kept.find((candidate) => overlaps(candidate, event));
+    if (!overlapping) {
+      kept.push(event);
+      continue;
+    }
+
+    const replace =
+      event.priority > overlapping.priority ||
+      (event.priority === overlapping.priority && event.severity > overlapping.severity);
+
+    if (replace) {
+      const index = kept.indexOf(overlapping);
+      kept[index] = event;
+    }
+  }
+
+  return kept.sort((left, right) => left.startUs - right.startUs);
 }
 
 export function detectAnalysisEvents(windowSlice) {
@@ -69,79 +172,101 @@ export function detectAnalysisEvents(windowSlice) {
   const derived = samples.map((sample, index) => {
     const previous = samples[index - 1];
     const status = getFlightStatusSummary(sample);
+    const rcTurnInput = axisPeak([sample.rc.roll, sample.rc.pitch, sample.rc.yaw]);
+    const setpointTurnInput = axisPeak([
+      sample.setpoint.roll,
+      sample.setpoint.pitch,
+      sample.setpoint.yaw,
+    ]);
+
     return {
       ...sample,
       previousThrottle: previous?.rc.throttle ?? sample.rc.throttle,
+      throttleDrop:
+        previous?.rc.throttle !== null &&
+        previous?.rc.throttle !== undefined &&
+        sample.rc.throttle !== null &&
+        sample.rc.throttle !== undefined
+          ? previous.rc.throttle - sample.rc.throttle
+          : null,
       status,
       errorMagnitude: getErrorMagnitude(sample.error),
+      turnInput: rcTurnInput,
+      setpointTurnInput,
     };
   });
 
-  return [
-    ...segmentByPredicate(
-      derived,
-      EVENT_TYPES.HIGH_THROTTLE_STRAIGHT,
-      (sample) =>
-        sample.rc.throttle !== null &&
-        sample.rc.roll !== null &&
-        sample.rc.pitch !== null &&
-        sample.rc.throttle >= 72 &&
-        Math.abs(sample.rc.roll) < 12 &&
-        Math.abs(sample.rc.pitch) < 12 && {
-          score: sample.rc.throttle,
-          summary: "High-throttle straight",
-        }
-    ),
-    ...segmentByPredicate(
-      derived,
-      EVENT_TYPES.CHOP_TURN,
-      (sample) =>
-        sample.previousThrottle !== null &&
-        sample.rc.throttle !== null &&
-        sample.rc.roll !== null &&
-        sample.rc.pitch !== null &&
-        sample.rc.yaw !== null &&
-        sample.previousThrottle >= 60 &&
-        sample.rc.throttle <= 30 &&
-        (Math.abs(sample.rc.roll) >= 18 ||
-          Math.abs(sample.rc.pitch) >= 18 ||
-          Math.abs(sample.rc.yaw) >= 18) && {
-          score: Math.abs(sample.previousThrottle - sample.rc.throttle),
-          summary: "Throttle chop + turn",
-        }
-    ),
-    ...segmentByPredicate(
-      derived,
-      EVENT_TYPES.LOADED_ROLL_ARC,
-      (sample) =>
-        sample.rc.throttle !== null &&
-        sample.setpoint.roll !== null &&
-        sample.setpoint.pitch !== null &&
-        sample.rc.throttle >= 35 &&
-        Math.abs(sample.setpoint.roll) >= 180 &&
-        Math.abs(sample.setpoint.pitch) <= 220 && {
-          score: Math.abs(sample.setpoint.roll),
-          summary: "Loaded roll arc",
-        }
-    ),
-    ...segmentByPredicate(
-      derived,
-      EVENT_TYPES.HIGH_ERROR_BURST,
-      (sample) =>
-        sample.errorMagnitude !== null &&
-        sample.errorMagnitude >= 90 && {
-          score: sample.errorMagnitude,
-          summary: "High error burst",
-        }
-    ),
-    ...segmentByPredicate(
-      derived,
-      EVENT_TYPES.SATURATION_BURST,
-      (sample) =>
-        sample.status.saturation && {
-          score: sample.status.motor.max,
-          summary: "Motor saturation burst",
-        }
-    ),
-  ].sort((left, right) => left.startUs - right.startUs);
+  const events = [
+    ...segmentByPredicate(derived, EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, (sample) => {
+      if (
+        sample.rc.throttle === null ||
+        sample.turnInput === null ||
+        sample.rc.throttle < 75 ||
+        sample.turnInput > 16
+      ) {
+        return false;
+      }
+
+      return {
+        score: (sample.rc.throttle ?? 0) + ((sample.errorMagnitude ?? 0) * 0.3),
+      };
+    }),
+    ...segmentByPredicate(derived, EVENT_TYPES.CHOP_TURN, (sample) => {
+      if (
+        sample.previousThrottle === null ||
+        sample.rc.throttle === null ||
+        sample.turnInput === null ||
+        sample.previousThrottle < 55 ||
+        sample.rc.throttle > 28 ||
+        (sample.throttleDrop ?? 0) < 18 ||
+        sample.turnInput < 22
+      ) {
+        return false;
+      }
+
+      return {
+        score: (sample.throttleDrop ?? 0) + sample.turnInput,
+      };
+    }),
+    ...segmentByPredicate(derived, EVENT_TYPES.LOADED_ROLL_ARC, (sample) => {
+      if (
+        sample.rc.throttle === null ||
+        sample.setpoint.roll === null ||
+        sample.setpoint.pitch === null ||
+        sample.rc.throttle < 35 ||
+        Math.abs(sample.setpoint.roll) < 180 ||
+        Math.abs(sample.setpoint.pitch) > 260
+      ) {
+        return false;
+      }
+
+      return {
+        score: Math.abs(sample.setpoint.roll) + (sample.rc.throttle ?? 0),
+      };
+    }),
+    ...segmentByPredicate(derived, EVENT_TYPES.HIGH_ERROR_BURST, (sample) => {
+      if (
+        sample.errorMagnitude === null ||
+        sample.errorMagnitude < 110 ||
+        sample.status.saturation
+      ) {
+        return false;
+      }
+
+      return {
+        score: sample.errorMagnitude,
+      };
+    }),
+    ...segmentByPredicate(derived, EVENT_TYPES.SATURATION_BURST, (sample) => {
+      if (!sample.status.saturation || sample.rc.throttle === null || sample.rc.throttle < 45) {
+        return false;
+      }
+
+      return {
+        score: (sample.status.motor.max ?? 0) + (sample.errorMagnitude ?? 0) * 0.2,
+      };
+    }),
+  ];
+
+  return pruneOverlappingEvents(events);
 }

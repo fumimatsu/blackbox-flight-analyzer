@@ -1368,7 +1368,25 @@ option:hover {
   text-align: left;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.event-list__content {
+  display: grid;
+  gap: 4px;
+}
+
+.event-list__content span,
+.event-list__time {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.event-list__time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
 }
 
 .compare-metric {

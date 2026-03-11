@@ -11,7 +11,7 @@ import {
   getFlightWindow,
 } from "../domain/blackbox/selectors/flightSelectors.js";
 import { detectAnalysisEvents } from "../domain/blackbox/events/detectEvents.js";
-import { EVENT_TYPES } from "../domain/blackbox/events/eventConfig.js";
+import { EVENT_TYPES, getEventLabel } from "../domain/blackbox/events/eventConfig.js";
 import {
   getFlightStatusSummary,
   getMotorStats,
@@ -847,8 +847,11 @@ function EventList({ events, onSelect }) {
             type="button"
             onClick={() => onSelect(event.startUs)}
           >
-            <strong>{event.summary}</strong>
-            <span>{formatMicroseconds(event.startUs)}</span>
+            <div className="event-list__content">
+              <strong>{event.summary}</strong>
+              <span>{event.detail}</span>
+            </div>
+            <span className="event-list__time">{formatMicroseconds(event.startUs)}</span>
           </button>
         ))
       ) : (
@@ -916,7 +919,7 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
             <option value="">Whole flight</option>
             {Object.values(EVENT_TYPES).map((type) => (
               <option key={type} value={type}>
-                {type}
+                {getEventLabel(type)}
               </option>
             ))}
           </select>
