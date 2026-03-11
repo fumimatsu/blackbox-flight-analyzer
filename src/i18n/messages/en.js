@@ -67,6 +67,7 @@ export const enMessages = {
     raw: "Raw",
     setpoint: "Setpoint",
     noData: "no data",
+    events: "Events",
     highThrottle: "High throttle",
     headroom: "Headroom",
     tracking: "Tracking",

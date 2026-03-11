@@ -67,6 +67,7 @@ export const jaMessages = {
     raw: "Raw",
     setpoint: "Setpoint",
     noData: "データなし",
+    events: "イベント",
     highThrottle: "高スロットル",
     headroom: "Headroom",
     tracking: "Tracking",

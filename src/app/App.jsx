@@ -711,6 +711,119 @@ function getFlagSegments(samples, flagKey, minDurationUs = 100000) {
   return segments;
 }
 
+function buildEventRailLanes(events, maxLanes = 3) {
+  const lanes = Array.from({ length: maxLanes }, () => []);
+
+  for (const event of events) {
+    let placed = false;
+    for (const lane of lanes) {
+      const previous = lane[lane.length - 1];
+      if (!previous || previous.endUs <= event.startUs) {
+        lane.push(event);
+        placed = true;
+        break;
+      }
+    }
+
+    if (!placed) {
+      lanes[maxLanes - 1].push({
+        ...event,
+        overflowed: true,
+      });
+    }
+  }
+
+  return lanes.filter((lane) => lane.length);
+}
+
+function EventTimelineCard({
+  events,
+  currentTimeUs,
+  selectedEventId,
+  onSelect,
+  locale,
+  t,
+}) {
+  const width = 176;
+  const laneHeight = 12;
+  const laneGap = 4;
+  const topPad = 2;
+  const startUs = events[0]?.windowStartUs ?? currentTimeUs ?? 0;
+  const endUs = events[0]?.windowEndUs ?? startUs;
+  const rangeUs = Math.max(endUs - startUs, 1);
+  const lanes = buildEventRailLanes(events, 3);
+  const height =
+    topPad * 2 +
+    Math.max(lanes.length, 1) * laneHeight +
+    Math.max(lanes.length - 1, 0) * laneGap;
+  const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
+
+  return (
+    <div className="event-timeline">
+      <div className="event-timeline__header">
+        <span>{t("overlay.events")}</span>
+        <strong>{events.length ? `${events.length}` : t("overlay.noData")}</strong>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="event-timeline__chart">
+        <rect x="0" y="0" width={width} height={height} className="event-timeline__bg" />
+        {lanes.length ? (
+          lanes.map((lane, laneIndex) => {
+            const y = topPad + laneIndex * (laneHeight + laneGap);
+            return (
+              <g key={`event-lane-${laneIndex}`}>
+                <rect
+                  x="0"
+                  y={y}
+                  width={width}
+                  height={laneHeight}
+                  rx="5"
+                  className="event-timeline__lane"
+                />
+                {lane.map((event) => {
+                  const x = ((event.startUs - startUs) / rangeUs) * width;
+                  const endX = ((event.endUs - startUs) / rangeUs) * width;
+                  return (
+                    <rect
+                      key={event.id}
+                      x={x}
+                      y={y}
+                      width={Math.max(endX - x, 6)}
+                      height={laneHeight}
+                      rx="5"
+                      className={`event-timeline__segment event-timeline__segment--${event.type} ${
+                        selectedEventId === event.id ? "event-timeline__segment--active" : ""
+                      } ${event.overflowed ? "event-timeline__segment--overflow" : ""}`}
+                      onClick={() => onSelect(event)}
+                    />
+                  );
+                })}
+              </g>
+            );
+          })
+        ) : (
+          <text
+            x={width / 2}
+            y={height / 2 + 4}
+            textAnchor="middle"
+            className="event-timeline__empty"
+          >
+            {t("events.none")}
+          </text>
+        )}
+        <line x1={cursorX} x2={cursorX} y1="0" y2={height} className="event-timeline__cursor" />
+      </svg>
+      <div className="event-timeline__legend">
+        {Object.values(EVENT_TYPES).map((type) => (
+          <span key={type} className="event-timeline__legend-item">
+            <i className={`event-timeline__legend-dot event-timeline__legend-dot--${type}`} />
+            {getEventLabel(type, locale)}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ErrorTrendCard({ snapshot, samples, currentTimeUs, t, locale }) {
   const width = 176;
   const height = 38;
@@ -1425,6 +1538,22 @@ export function App() {
       }
     );
   }, [preparedFlight, currentTimeUs]);
+  const summaryEvents = useMemo(() => {
+    if (!preparedFlight || !metricsWindow) {
+      return [];
+    }
+
+    return preparedFlight.events
+      .filter(
+        (event) =>
+          event.startUs <= metricsWindow.endUs && event.endUs >= metricsWindow.startUs
+      )
+      .map((event) => ({
+        ...event,
+        windowStartUs: metricsWindow.startUs,
+        windowEndUs: metricsWindow.endUs,
+      }));
+  }, [preparedFlight, metricsWindow]);
 
   const leftStickConfig = useMemo(() => {
     if (!snapshot) {
@@ -2043,6 +2172,19 @@ export function App() {
                       currentTimeUs={currentTimeUs}
                       t={t}
                       locale={locale}
+                    />
+                    <EventTimelineCard
+                      events={summaryEvents}
+                      currentTimeUs={currentTimeUs}
+                      selectedEventId={selectedReviewEventId}
+                      onSelect={(event) => {
+                        setCurrentTimeUs(event.startUs);
+                        setSelectedReviewEventId(
+                          selectedReviewEventId === event.id ? null : event.id
+                        );
+                      }}
+                      locale={locale}
+                      t={t}
                     />
                     <ErrorTrendCard
                       snapshot={snapshot}
