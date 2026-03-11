@@ -98,3 +98,33 @@ export function getFlightStatusSummary(snapshot, locale = "en") {
     flags: status,
   };
 }
+
+function summarizeStickAxis(samples, axisKey) {
+  let min = Infinity;
+  let max = -Infinity;
+
+  for (const sample of samples) {
+    const value = sample?.rc?.[axisKey];
+    if (value === null || value === undefined || Number.isNaN(value)) {
+      continue;
+    }
+
+    min = Math.min(min, value);
+    max = Math.max(max, value);
+  }
+
+  if (min === Infinity || max === -Infinity) {
+    return { min: null, max: null };
+  }
+
+  return { min, max };
+}
+
+export function getStickAxisUsage(samples) {
+  return {
+    throttle: summarizeStickAxis(samples, "throttle"),
+    yaw: summarizeStickAxis(samples, "yaw"),
+    roll: summarizeStickAxis(samples, "roll"),
+    pitch: summarizeStickAxis(samples, "pitch"),
+  };
+}

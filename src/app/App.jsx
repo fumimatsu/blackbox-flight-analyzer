@@ -17,6 +17,7 @@ import {
   getFlightStatusSummary,
   getMotorStats,
   getRpmStats,
+  getStickAxisUsage,
 } from "../domain/blackbox/derived/flightDerived.js";
 import { getCompareSummary } from "../domain/compare/compareMetrics.js";
 import {
@@ -187,7 +188,69 @@ function buildAxisLabel(snapshot, axisMeta) {
   )}`;
 }
 
-function buildStickConfig(snapshot, trailSamples, stickKey, stickMode, t, stickGraphWindow, miniGraphEnabled, currentTimeUs) {
+function formatUsageDescriptor(axisKey, usage, t) {
+  if (!usage || (usage.min === null && usage.max === null)) {
+    return null;
+  }
+
+  const isThrottle = axisKey === "throttle";
+  const minValue = isThrottle ? 0 : -500;
+  const maxValue = isThrottle ? 100 : 500;
+  const range = maxValue - minValue || 1;
+  const clampValue = (value) => Math.max(minValue, Math.min(maxValue, value ?? 0));
+  const startValue = isThrottle ? Math.max(0, clampValue(usage.min)) : clampValue(usage.min);
+  const endValue = clampValue(usage.max);
+  const startPercent = ((startValue - minValue) / range) * 100;
+  const endPercent = ((endValue - minValue) / range) * 100;
+
+  return {
+    key: axisKey,
+    label: getAxisMeta(axisKey, t).shortTitle,
+    centered: !isThrottle,
+    startPercent,
+    endPercent,
+    valuesLabel: isThrottle
+      ? `${formatMaybeValue(Math.max(0, clampValue(usage.min)), 0, "%")} / ${formatMaybeValue(
+          Math.max(0, clampValue(usage.max)),
+          0,
+          "%"
+        )}`
+      : `-${formatMaybeValue(Math.abs(Math.min(0, clampValue(usage.min))) / 5, 0, "%")} / +${formatMaybeValue(
+          Math.max(0, clampValue(usage.max)) / 5,
+          0,
+          "%"
+        )}`,
+    className: `stick-usage__range stick-usage__range--${axisKey}`,
+  };
+}
+
+function buildStickUsage(stickKey, stickMode, usageSummary, t) {
+  const isMode1 = stickMode === "mode1";
+  const axes =
+    stickKey === "left"
+      ? isMode1
+        ? ["yaw", "pitch"]
+        : ["yaw", "throttle"]
+      : isMode1
+        ? ["roll", "throttle"]
+        : ["roll", "pitch"];
+
+  return axes
+    .map((axisKey) => formatUsageDescriptor(axisKey, usageSummary?.[axisKey], t))
+    .filter(Boolean);
+}
+
+function buildStickConfig(
+  snapshot,
+  trailSamples,
+  stickKey,
+  stickMode,
+  t,
+  stickGraphWindow,
+  miniGraphEnabled,
+  currentTimeUs,
+  usageSummary
+) {
   const isMode1 = stickMode === "mode1";
   const axes =
     stickKey === "left"
@@ -272,6 +335,7 @@ function buildStickConfig(snapshot, trailSamples, stickKey, stickMode, t, stickG
     rawPoint,
     setpointPoint,
     miniGraph,
+    usage: buildStickUsage(stickKey, stickMode, usageSummary, t),
   };
 }
 
@@ -317,6 +381,7 @@ function StickOverlay({
   setpointPoint = null,
   miniGraph = null,
   legendLabels,
+  usage = [],
 }) {
   const rawActive = Boolean(rawPoint);
   const setpointActive = Boolean(setpointPoint);
@@ -394,6 +459,24 @@ function StickOverlay({
           <i className="stick-card__legend-dot stick-card__legend-dot--setpoint" />
           {legendLabels.setpoint}
         </span>
+      </div>
+      <div className="stick-usage">
+        {usage.map((item) => (
+          <div key={item.key} className="stick-usage__row">
+            <span className="stick-usage__axis">{item.label}</span>
+            <div className="stick-usage__track">
+              {item.centered ? <span className="stick-usage__center" /> : null}
+              <span
+                className={item.className}
+                style={{
+                  left: `${Math.min(item.startPercent, item.endPercent)}%`,
+                  width: `${Math.max(2, Math.abs(item.endPercent - item.startPercent))}%`,
+                }}
+              />
+            </div>
+            <span className="stick-usage__values">{item.valuesLabel}</span>
+          </div>
+        ))}
       </div>
       {miniGraph}
     </div>
@@ -1217,6 +1300,10 @@ export function App() {
     () => (preparedFlight ? evaluateDiagnosticRules(preparedFlight, locale) : []),
     [preparedFlight, locale]
   );
+  const stickUsage = useMemo(
+    () => (preparedFlight?.window?.samples ? getStickAxisUsage(preparedFlight.window.samples) : null),
+    [preparedFlight]
+  );
   const setupSummary = useMemo(
     () => (preparedFlight ? getFlightSetupSummary(preparedFlight) : null),
     [preparedFlight]
@@ -1284,7 +1371,8 @@ export function App() {
       t,
       stickGraphWindow,
       overlayState.stickMiniGraphEnabled,
-      currentTimeUs
+      currentTimeUs,
+      stickUsage
     );
   }, [
     snapshot,
@@ -1293,6 +1381,7 @@ export function App() {
     stickGraphWindow,
     overlayState.stickMiniGraphEnabled,
     currentTimeUs,
+    stickUsage,
     t,
   ]);
 
@@ -1308,7 +1397,8 @@ export function App() {
       t,
       stickGraphWindow,
       overlayState.stickMiniGraphEnabled,
-      currentTimeUs
+      currentTimeUs,
+      stickUsage
     );
   }, [
     snapshot,
@@ -1317,6 +1407,7 @@ export function App() {
     stickGraphWindow,
     overlayState.stickMiniGraphEnabled,
     currentTimeUs,
+    stickUsage,
     t,
   ]);
 
