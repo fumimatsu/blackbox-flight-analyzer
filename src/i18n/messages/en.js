@@ -17,7 +17,7 @@ export const enMessages = {
   },
   app: {
     eyebrow: "Blackbox Flight Analyzer MVP",
-    title: "Video-led review with event-based comparison.",
+    title: "Flight Analyzer",
     emptyEyebrow: "Blackbox Flight Analyzer",
     emptyTitle: "Video-first Blackbox analysis for DVR review.",
     emptyBody:

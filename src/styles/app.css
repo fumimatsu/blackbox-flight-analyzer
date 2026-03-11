@@ -103,21 +103,21 @@ input {
 }
 
 .topbar > :first-child {
-  flex: 0 1 280px;
+  flex: 0 1 180px;
   min-width: 0;
 }
 
 .topbar .toolbar {
-  flex: 1 1 520px;
+  flex: 1 1 620px;
   justify-content: flex-end;
-  gap: 8px;
+  gap: 6px;
 }
 
 .topbar h1,
 .empty-state h1 {
   margin: 0;
-  font-size: clamp(22px, 2.4vw, 34px);
-  line-height: 1.05;
+  font-size: clamp(18px, 1.5vw, 22px);
+  line-height: 1;
   white-space: nowrap;
 }
 
@@ -155,9 +155,10 @@ input {
 .topbar > .toolbar:first-of-type .transport,
 .topbar > .toolbar:first-of-type .rate-select,
 .topbar > .toolbar:first-of-type .rate-slider {
-  padding: 8px 12px;
-  font-size: 13px;
-  min-height: 38px;
+  padding: 6px 10px;
+  font-size: 12px;
+  min-height: 32px;
+  border-radius: 14px;
 }
 
 .transport:disabled {
@@ -195,15 +196,15 @@ input {
 
 .toolbar--secondary .transport,
 .toolbar--secondary .transport--toggle {
-  padding: 5px 9px;
-  font-size: 11px;
+  padding: 6px 10px;
+  font-size: 12px;
   line-height: 1;
-  min-height: 28px;
-  border-radius: 999px;
+  min-height: 32px;
+  border-radius: 14px;
 }
 
 .toolbar--secondary .transport--toggle {
-  padding-inline: 8px;
+  padding-inline: 10px;
 }
 
 .file-button input {
