@@ -13,6 +13,7 @@ import {
 import { detectAnalysisEvents } from "../domain/blackbox/events/detectEvents.js";
 import { EVENT_TYPES, getEventLabel } from "../domain/blackbox/events/eventConfig.js";
 import {
+  getErrorMagnitude,
   getFlightStatusFlags,
   getFlightStatusSummary,
   getMotorStats,
