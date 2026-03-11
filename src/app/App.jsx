@@ -229,6 +229,64 @@ function StatusPill({ label, value, accent = "neutral", compact = false }) {
   );
 }
 
+function normalizeHeadingDegrees(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+  let normalized = value % 360;
+  if (normalized < 0) {
+    normalized += 360;
+  }
+  return normalized;
+}
+
+function AttitudeIndicator({ attitude }) {
+  const roll = attitude?.roll ?? null;
+  const pitch = attitude?.pitch ?? null;
+  const yaw = normalizeHeadingDegrees(attitude?.yaw ?? null);
+  const pitchOffset = pitch === null ? 0 : Math.max(-28, Math.min(28, pitch * 0.6));
+  const rollText = formatMaybeValue(roll, 0, "°");
+  const pitchText = formatMaybeValue(pitch, 0, "°");
+  const yawText = formatMaybeValue(yaw, 0, "°");
+
+  return (
+    <div className="attitude-card">
+      <div className="attitude-card__header">
+        <span>Attitude</span>
+        <strong>{yawText}</strong>
+      </div>
+      <div className="attitude-card__scene">
+        <div className="attitude-card__ring" />
+        <div
+          className="attitude-card__craft"
+          style={{
+            transform: `translateY(${pitchOffset}px) rotate(${roll ?? 0}deg)`,
+            opacity: roll === null && pitch === null ? 0.35 : 1,
+          }}
+        >
+          <span className="attitude-card__arm attitude-card__arm--front-left" />
+          <span className="attitude-card__arm attitude-card__arm--front-right" />
+          <span className="attitude-card__arm attitude-card__arm--rear-left" />
+          <span className="attitude-card__arm attitude-card__arm--rear-right" />
+          <span className="attitude-card__body" />
+        </div>
+        <div
+          className="attitude-card__heading"
+          style={{
+            transform: `rotate(${yaw ?? 0}deg)`,
+            opacity: yaw === null ? 0.3 : 1,
+          }}
+        />
+      </div>
+      <div className="attitude-card__values">
+        <span>R {rollText}</span>
+        <span>P {pitchText}</span>
+        <span>Y {yawText}</span>
+      </div>
+    </div>
+  );
+}
+
 function thresholdY(value, minValue, maxValue, height) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return null;
@@ -1474,6 +1532,9 @@ export function App() {
                     samples={metricsWindow?.samples ?? []}
                     currentTimeUs={currentTimeUs}
                   />
+                </div>
+                <div className="overlay overlay--attitude">
+                  <AttitudeIndicator attitude={snapshot.attitude} />
                 </div>
                 <div className="overlay overlay--sticks overlay--sticks-left">
                   <StickOverlay

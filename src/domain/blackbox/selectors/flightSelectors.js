@@ -6,6 +6,13 @@ const THROTTLE_INDEX = 3;
 const SAMPLE_LIMIT = 240;
 const TIME_FIELD_INDEX = FlightLogParser.prototype.FLIGHT_LOG_FIELD_INDEX_TIME;
 
+function radiansToDegrees(value) {
+  if (!isPresent(value)) {
+    return null;
+  }
+  return (value * 180) / Math.PI;
+}
+
 function resolveFieldIndex(session, candidates) {
   for (const candidate of candidates) {
     const index = session.fieldIndex[candidate];
@@ -203,6 +210,20 @@ function getRawRcValue(session, frame, axis) {
   return normalizeRawAxis(session, raw);
 }
 
+function getAttitude(session, frame) {
+  return {
+    roll: radiansToDegrees(
+      getValue(frame, resolveFieldIndex(session, ["heading[0]"]))
+    ),
+    pitch: radiansToDegrees(
+      getValue(frame, resolveFieldIndex(session, ["heading[1]"]))
+    ),
+    yaw: radiansToDegrees(
+      getValue(frame, resolveFieldIndex(session, ["heading[2]"]))
+    ),
+  };
+}
+
 function getFrameAtTime(session, timeUs) {
   const clamped = clampTime(session, timeUs);
   const frameWindow = session.log.getCurrentFrameAtTime(clamped);
@@ -228,6 +249,7 @@ function mapSampleFromFrame(session, frame, timeUs = null) {
     setpoint: mapAxisValues(session, frame, "setpoint"),
     gyro: mapAxisValues(session, frame, "gyro"),
     error: mapAxisValues(session, frame, "error"),
+    attitude: getAttitude(session, frame),
     motors: getMotorValues(session, frame),
     rpm: getRpmValues(session, frame),
     aux: getAuxChannels(session, frame),

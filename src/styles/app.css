@@ -371,6 +371,11 @@ input {
   width: min(380px, calc(100% - 24px));
 }
 
+.overlay--attitude {
+  top: 58px;
+  right: 16px;
+}
+
 .overlay--sticks {
   bottom: 18px;
 }
@@ -558,6 +563,143 @@ input {
 .stick-card {
   width: 150px;
   padding: 10px;
+}
+
+.attitude-card {
+  width: 150px;
+  padding: 12px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: rgba(6, 12, 18, 0.62);
+  backdrop-filter: blur(14px);
+}
+
+.attitude-card__header,
+.attitude-card__values {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.attitude-card__header span,
+.attitude-card__values {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.attitude-card__header strong,
+.attitude-card__values span {
+  font-variant-numeric: tabular-nums;
+}
+
+.attitude-card__scene {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  margin: 10px 0 8px;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at center, rgba(125, 242, 197, 0.08), transparent 58%),
+    rgba(255, 255, 255, 0.03);
+  overflow: hidden;
+}
+
+.attitude-card__ring {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.attitude-card__craft,
+.attitude-card__heading {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+
+.attitude-card__craft {
+  width: 70px;
+  height: 70px;
+  margin-left: -35px;
+  margin-top: -35px;
+}
+
+.attitude-card__arm {
+  position: absolute;
+  width: 26px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(152, 190, 255, 0.9);
+}
+
+.attitude-card__arm--front-left {
+  left: 6px;
+  top: 16px;
+  transform: rotate(-35deg);
+}
+
+.attitude-card__arm--front-right {
+  right: 6px;
+  top: 16px;
+  transform: rotate(35deg);
+}
+
+.attitude-card__arm--rear-left {
+  left: 6px;
+  bottom: 16px;
+  transform: rotate(35deg);
+  background: rgba(255, 215, 106, 0.9);
+}
+
+.attitude-card__arm--rear-right {
+  right: 6px;
+  bottom: 16px;
+  transform: rotate(-35deg);
+  background: rgba(255, 215, 106, 0.9);
+}
+
+.attitude-card__body {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin-left: -9px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 4px rgba(125, 242, 197, 0.14);
+}
+
+.attitude-card__heading {
+  width: 0;
+  height: 48px;
+  margin-left: -1px;
+  margin-top: -48px;
+}
+
+.attitude-card__heading::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 48px;
+  background: linear-gradient(180deg, rgba(125, 242, 197, 0.95), rgba(125, 242, 197, 0.12));
+}
+
+.attitude-card__heading::after {
+  content: "";
+  position: absolute;
+  left: -5px;
+  top: -2px;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
 }
 
 .stick-card__title {
