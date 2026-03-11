@@ -127,6 +127,7 @@ input {
 .toolbar--secondary {
   margin-top: 12px;
   align-items: center;
+  gap: 8px;
 }
 
 .toolbar__label {
@@ -173,6 +174,22 @@ input {
 
 .transport--ghost {
   background: transparent;
+}
+
+.toolbar--secondary .toolbar__label {
+  margin-right: 2px;
+}
+
+.toolbar--secondary .transport,
+.toolbar--secondary .transport--toggle {
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1;
+  min-height: 38px;
+}
+
+.toolbar--secondary .transport--toggle {
+  padding-inline: 11px;
 }
 
 .file-button input {
