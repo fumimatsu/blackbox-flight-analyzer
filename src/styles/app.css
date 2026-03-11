@@ -121,6 +121,25 @@ input {
   white-space: nowrap;
 }
 
+.topbar__links {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.topbar__links a {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.topbar__links a:hover {
+  color: var(--text);
+  border-bottom-color: rgba(125, 242, 197, 0.45);
+}
+
 .toolbar {
   flex-wrap: wrap;
   align-items: center;
@@ -1752,6 +1771,25 @@ option:hover {
   height: 168px;
 }
 
+.history__header-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.history__header-copy h3 {
+  margin: 0;
+}
+
+.history__header-copy p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .history__line {
   fill: none;
   stroke-width: 2.4;
@@ -1769,8 +1807,32 @@ option:hover {
   stroke: var(--pitch);
 }
 
+.history__line--error {
+  stroke: rgba(125, 242, 197, 0.98);
+}
+
 .history__line--rpm {
   stroke: var(--rpm);
+}
+
+.history__line--rpm-floor {
+  stroke: rgba(142, 222, 255, 0.98);
+}
+
+.history__line--motor {
+  stroke: rgba(255, 187, 112, 0.98);
+}
+
+.history__line--spread {
+  stroke: rgba(255, 127, 110, 0.98);
+}
+
+.history__line--motor-floor {
+  stroke: rgba(206, 221, 231, 0.92);
+}
+
+.history__line--stick-gap {
+  stroke: rgba(170, 156, 255, 0.98);
 }
 
 .history__cursor {
@@ -1841,6 +1903,31 @@ option:hover {
 
 .history__legend-swatch--rpm {
   background: var(--rpm);
+}
+
+.history__legend-swatch--errorMagnitude,
+.history__legend-swatch--recoveryError {
+  background: rgba(125, 242, 197, 0.98);
+}
+
+.history__legend-swatch--motorMax {
+  background: rgba(255, 187, 112, 0.98);
+}
+
+.history__legend-swatch--motorSpread {
+  background: rgba(255, 127, 110, 0.98);
+}
+
+.history__legend-swatch--motorFloor {
+  background: rgba(206, 221, 231, 0.92);
+}
+
+.history__legend-swatch--stickGap {
+  background: rgba(170, 156, 255, 0.98);
+}
+
+.history__legend-swatch--rpmFloor {
+  background: rgba(142, 222, 255, 0.98);
 }
 
 .event-list__item {

@@ -36,6 +36,8 @@ const DIAGNOSTIC_EVENT_PADDING_US = 300000;
 const MIN_PLAYBACK_RATE = 0.25;
 const MAX_PLAYBACK_RATE = 2;
 const PLAYBACK_RATE_STEP = 0.05;
+const GITHUB_REPOSITORY_URL = "https://github.com/fumimatsu/blackbox-flight-analyzer";
+const LIVE_DEMO_URL = "https://fumimatsu.github.io/blackbox-flight-analyzer/";
 
 function formatMicroseconds(timeUs) {
   const totalMs = Math.max(0, Math.round(timeUs / 1000));
@@ -1106,52 +1108,282 @@ function StickHistoryMini({
   );
 }
 
-function HistoryGraph({ flight, currentTimeUs, t }) {
+function getStickGapValue(sample) {
+  const values = ["roll", "pitch", "yaw"]
+    .map((axis) => {
+      const rc = sample?.rc?.[axis];
+      const setpoint = sample?.setpoint?.[axis];
+      if (
+        rc === null ||
+        rc === undefined ||
+        setpoint === null ||
+        setpoint === undefined ||
+        Number.isNaN(rc) ||
+        Number.isNaN(setpoint)
+      ) {
+        return null;
+      }
+      return Math.abs(setpoint - rc);
+    })
+    .filter((value) => value !== null);
+
+  return values.length ? Math.max(...values) : null;
+}
+
+function getMotorMaxValue(sample) {
+  return getMotorStats(sample?.motors ?? []).max;
+}
+
+function getMotorSpreadValue(sample) {
+  return getMotorStats(sample?.motors ?? []).spread;
+}
+
+function getMotorFloorValue(sample) {
+  return getMotorStats(sample?.motors ?? []).min;
+}
+
+function getRpmFloorValue(sample) {
+  const rpmValues = (sample?.rpm ?? []).filter(
+    (value) => value !== null && value !== undefined && !Number.isNaN(value)
+  );
+  return rpmValues.length ? Math.min(...rpmValues) : null;
+}
+
+function buildHistoryPreset(selectedEvent, t) {
+  if (!selectedEvent) {
+    return {
+      key: "overview",
+      label: t("history.presets.overview"),
+      lanes: [
+        {
+          key: "throttle",
+          label: t("history.throttle"),
+          className: "history__line history__line--throttle",
+          valueSelector: (sample) => sample.rc.throttle,
+        },
+        {
+          key: "errorMagnitude",
+          label: t("history.errorMagnitude"),
+          className: "history__line history__line--error",
+          valueSelector: (sample) => getErrorMagnitude(sample.error),
+        },
+        {
+          key: "motorMax",
+          label: t("history.motorMax"),
+          className: "history__line history__line--motor",
+          valueSelector: getMotorMaxValue,
+        },
+        {
+          key: "stickGap",
+          label: t("history.stickGap"),
+          className: "history__line history__line--stick-gap",
+          valueSelector: getStickGapValue,
+        },
+      ],
+    };
+  }
+
+  switch (selectedEvent.type) {
+    case EVENT_TYPES.LOADED_ROLL_ARC:
+      return {
+        key: "loadedTurn",
+        label: t("history.presets.loadedTurn"),
+        lanes: [
+          {
+            key: "throttle",
+            label: t("history.throttle"),
+            className: "history__line history__line--throttle",
+            valueSelector: (sample) => sample.rc.throttle,
+          },
+          {
+            key: "errorMagnitude",
+            label: t("history.errorMagnitude"),
+            className: "history__line history__line--error",
+            valueSelector: (sample) => getErrorMagnitude(sample.error),
+          },
+          {
+            key: "motorMax",
+            label: t("history.motorMax"),
+            className: "history__line history__line--motor",
+            valueSelector: getMotorMaxValue,
+          },
+          {
+            key: "motorSpread",
+            label: t("history.motorSpread"),
+            className: "history__line history__line--spread",
+            valueSelector: getMotorSpreadValue,
+          },
+        ],
+      };
+    case EVENT_TYPES.CHOP_TURN:
+      return {
+        key: "lowThrottle",
+        label: t("history.presets.lowThrottle"),
+        lanes: [
+          {
+            key: "throttle",
+            label: t("history.throttle"),
+            className: "history__line history__line--throttle",
+            valueSelector: (sample) => sample.rc.throttle,
+          },
+          {
+            key: "rpmFloor",
+            label: t("history.rpmFloor"),
+            className: "history__line history__line--rpm-floor",
+            valueSelector: getRpmFloorValue,
+          },
+          {
+            key: "recoveryError",
+            label: t("history.recoveryError"),
+            className: "history__line history__line--error",
+            valueSelector: (sample) => getErrorMagnitude(sample.error),
+          },
+          {
+            key: "motorFloor",
+            label: t("history.motorFloor"),
+            className: "history__line history__line--motor-floor",
+            valueSelector: getMotorFloorValue,
+          },
+        ],
+      };
+    case EVENT_TYPES.HIGH_ERROR_BURST:
+      return {
+        key: "tracking",
+        label: t("history.presets.tracking"),
+        lanes: [
+          {
+            key: "errorMagnitude",
+            label: t("history.errorMagnitude"),
+            className: "history__line history__line--error",
+            valueSelector: (sample) => getErrorMagnitude(sample.error),
+          },
+          {
+            key: "roll",
+            label: t("history.rollError"),
+            className: "history__line history__line--roll",
+            valueSelector: (sample) => sample.error.roll,
+          },
+          {
+            key: "pitch",
+            label: t("history.pitchError"),
+            className: "history__line history__line--pitch",
+            valueSelector: (sample) => sample.error.pitch,
+          },
+          {
+            key: "motorMax",
+            label: t("history.motorMax"),
+            className: "history__line history__line--motor",
+            valueSelector: getMotorMaxValue,
+          },
+        ],
+      };
+    case EVENT_TYPES.SATURATION_BURST:
+      return {
+        key: "headroom",
+        label: t("history.presets.headroom"),
+        lanes: [
+          {
+            key: "motorMax",
+            label: t("history.motorMax"),
+            className: "history__line history__line--motor",
+            valueSelector: getMotorMaxValue,
+          },
+          {
+            key: "motorSpread",
+            label: t("history.motorSpread"),
+            className: "history__line history__line--spread",
+            valueSelector: getMotorSpreadValue,
+          },
+          {
+            key: "throttle",
+            label: t("history.throttle"),
+            className: "history__line history__line--throttle",
+            valueSelector: (sample) => sample.rc.throttle,
+          },
+          {
+            key: "rpmAvg",
+            label: t("history.rpmAvg"),
+            className: "history__line history__line--rpm",
+            valueSelector: (sample) => getRpmStats(sample.rpm).avg,
+          },
+        ],
+      };
+    case EVENT_TYPES.HIGH_THROTTLE_STRAIGHT:
+    default:
+      return {
+        key: "highThrottle",
+        label: t("history.presets.highThrottle"),
+        lanes: [
+          {
+            key: "throttle",
+            label: t("history.throttle"),
+            className: "history__line history__line--throttle",
+            valueSelector: (sample) => sample.rc.throttle,
+          },
+          {
+            key: "errorMagnitude",
+            label: t("history.errorMagnitude"),
+            className: "history__line history__line--error",
+            valueSelector: (sample) => getErrorMagnitude(sample.error),
+          },
+          {
+            key: "motorMax",
+            label: t("history.motorMax"),
+            className: "history__line history__line--motor",
+            valueSelector: getMotorMaxValue,
+          },
+          {
+            key: "rpmAvg",
+            label: t("history.rpmAvg"),
+            className: "history__line history__line--rpm",
+            valueSelector: (sample) => getRpmStats(sample.rpm).avg,
+          },
+        ],
+      };
+  }
+}
+
+function HistoryGraph({ flight, currentTimeUs, selectedEvent, t }) {
   const width = 960;
   const laneHeight = 42;
-  const lanes = [
-    {
-      key: "throttle",
-      label: t("history.throttle"),
-      className: "history__line history__line--throttle",
-      valueSelector: (sample) => sample.rc.throttle,
-    },
-    {
-      key: "roll",
-      label: t("history.rollError"),
-      className: "history__line history__line--roll",
-      valueSelector: (sample) => sample.error.roll,
-    },
-    {
-      key: "pitch",
-      label: t("history.pitchError"),
-      className: "history__line history__line--pitch",
-      valueSelector: (sample) => sample.error.pitch,
-    },
-    {
-      key: "rpm",
-      label: t("history.rpmAvg"),
-      className: "history__line history__line--rpm",
-      valueSelector: (sample) => getRpmStats(sample.rpm).avg,
-    },
-  ];
+  const paddingUs = 1500000;
+  const preset = buildHistoryPreset(selectedEvent, t);
+  const startUs = selectedEvent
+    ? Math.max(flight.minTimeUs, selectedEvent.startUs - paddingUs)
+    : flight.minTimeUs;
+  const endUs = selectedEvent
+    ? Math.min(flight.maxTimeUs, selectedEvent.endUs + paddingUs)
+    : flight.maxTimeUs;
+  const lanes = preset.lanes;
+  const window =
+    selectedEvent && (startUs !== flight.minTimeUs || endUs !== flight.maxTimeUs)
+      ? getFlightWindow(flight, startUs, endUs)
+      : flight.window;
+  const visibleEvents = (flight.events ?? []).filter(
+    (event) => event.startUs <= endUs && event.endUs >= startUs
+  );
   const height = laneHeight * lanes.length;
-  const cursor =
-    ((currentTimeUs - flight.minTimeUs) / Math.max(flight.durationUs, 1)) * width;
+  const cursor = Math.max(
+    0,
+    Math.min(width, ((currentTimeUs - startUs) / Math.max(endUs - startUs, 1)) * width)
+  );
 
   return (
     <div className="history">
       <div className="history__header">
-        <h3>{t("history.title")}</h3>
+        <div className="history__header-copy">
+          <h3>{t("history.title")}</h3>
+          <p>
+            {preset.label}
+            {selectedEvent ? ` · ${selectedEvent.summary}` : ""}
+          </p>
+        </div>
         <span>{formatMicroseconds(currentTimeUs - flight.minTimeUs)}</span>
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="history__svg">
-        {flight.events.map((event) => {
-          const x =
-            ((event.startUs - flight.minTimeUs) / Math.max(flight.durationUs, 1)) *
-            width;
-          const eventWidth =
-            (event.durationUs / Math.max(flight.durationUs, 1)) * width;
+        {visibleEvents.map((event) => {
+          const x = ((event.startUs - startUs) / Math.max(endUs - startUs, 1)) * width;
+          const eventWidth = (event.durationUs / Math.max(endUs - startUs, 1)) * width;
           return (
             <rect
               key={event.id}
@@ -1181,7 +1413,7 @@ function HistoryGraph({ flight, currentTimeUs, t }) {
             />
             <polyline
               points={polylinePoints(
-                flight.window.samples,
+                window.samples,
                 lane.valueSelector,
                 width,
                 laneHeight - 6
@@ -1963,6 +2195,14 @@ export function App() {
         <div>
           <p className="eyebrow">{t("app.eyebrow")}</p>
           <h1>{t("app.title")}</h1>
+          <div className="topbar__links">
+            <a href={LIVE_DEMO_URL} target="_blank" rel="noreferrer">
+              {t("app.liveDemo")}
+            </a>
+            <a href={GITHUB_REPOSITORY_URL} target="_blank" rel="noreferrer">
+              {t("app.githubRepo")}
+            </a>
+          </div>
         </div>
         <div className="toolbar">
           <label className="file-button">
@@ -2337,7 +2577,12 @@ export function App() {
             />
           </div>
           {overlayState.historyOpen ? (
-            <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} t={t} />
+            <HistoryGraph
+              flight={preparedFlight}
+              currentTimeUs={currentTimeUs}
+              selectedEvent={selectedReviewEvent}
+              t={t}
+            />
           ) : null}
         </section>
 

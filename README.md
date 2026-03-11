@@ -4,6 +4,9 @@ Video-first Blackbox review app for pilots who want to understand what happened 
 
 ![Blackbox Flight Analyzer UI](./public/images/blackbox-flight-analyzer-ui.gif)
 
+- Live demo: [fumimatsu.github.io/blackbox-flight-analyzer](https://fumimatsu.github.io/blackbox-flight-analyzer/)
+- Source: [github.com/fumimatsu/blackbox-flight-analyzer](https://github.com/fumimatsu/blackbox-flight-analyzer)
+
 ## Why this exists
 
 Existing Blackbox viewers can already overlay flight data on top of DVR footage.
@@ -46,6 +49,24 @@ This project does not aim to repackage an existing Blackbox viewer UI. The reusa
 - `npm install`
 - `npm run start`
 - `npm run build`
+
+## GitHub Pages
+
+This repo now includes a GitHub Actions workflow that builds and deploys the app to GitHub Pages on every push to `main`.
+
+To enable it in the repository settings:
+
+1. Open `Settings -> Pages`
+2. Set `Source` to `GitHub Actions`
+3. Push to `main` or run the `Deploy GitHub Pages` workflow manually
+
+The workflow runs:
+
+- `npm ci`
+- `npm test`
+- `npm run build`
+
+The Vite `base` path is set automatically for GitHub Pages builds, while local development still uses `/`.
 
 ## Structure
 
