@@ -3,34 +3,55 @@
 この文書は、実ログと実 DVR の検証セットを固定するための台帳です。
 成功例だけを集めないこと。壊れる入力を含めない検証は無意味です。
 
-## 使い方
+## Storage Policy
+
+- 実サンプルは repo 直下の `data/` に置いてローカル運用する
+- `.gitignore` で `data/*.bbl`, `data/*.BBL`, `data/*.mp4` などは追跡しない
+- docs には repo 相対の想定ファイル名を書く
+- sample を他メンバーに渡す必要がある場合は、共有方法を別途決める。大容量バイナリを git に入れない
+
+## Recording Rules
 
 - 各サンプルに一意な ID を付ける
 - `.bbl` と DVR を対にできる場合は対にする
 - 「何を検証するためのサンプルか」を先に書く
 - 成功したかどうかだけで終わらせず、ズレ方と壊れ方を書く
-
-## サンプル一覧
-
-| ID | 種別 | ファイル名 | 目的 | 期待観察 | 実観察 | 結果 |
-| --- | --- | --- | --- | --- | --- | --- |
-| LOG-001 | BBL | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.BBL` | 現在の baseline ログ | 読み込み成功、snapshot が破綻しない | 読み込み成功。flight tab 表示あり。継続時間は 01:14.944 と観察。event list は 12 件表示 | 成功 |
-| LOG-002 | BBL | TBD | 未知ヘッダを含むログ | 読み込み継続、warning のみ | サンプル未追加 | 未実施 |
-| LOG-003 | BBL | TBD | AUX / RPM 差異のあるログ | 欠損を誤表示しない | サンプル未追加 | 未実施 |
-| LOG-004 | BBL | TBD | 複数 readable section を含むログ | 1 ファイルから複数 flight tab が出る。各 section が区別できる。unreadable section があれば skip が分かる | コード上は `loadFlightSessionsFromFile()` と adapter test で担保済み。実 fixture はまだ repo 内で固定できていない | 部分成功 |
-| DVR-001 | DVR | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.mp4` | 現在の baseline DVR | 動画 attach 成功、auto sync の観察起点になる | attach 後も画面は継続。1920x1080 / 60fps / 135.808s。auto sync は `ARMED text was not detected in the first 10 seconds.` と表示 | 部分成功 |
-| DVR-002 | DVR | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.mp4` | OCR 失敗時 UX の確認 | 失敗を表示し手動調整に戻れる | 失敗メッセージは表示された。少なくともクラッシュはしない。手動 offset 調整の細かい操作確認は未記録 | 部分成功 |
-
-## 記録ルール
-
-- 結果は `成功` `部分成功` `失敗` の 3 つで書く
+- 結果は `成功` `部分成功` `失敗` `未実施` の 4 つで書く
 - `実観察` には最低でも 1 つ具体例を書く
 - 失敗時は再現手順を残す
 
-## 次に埋めるべき項目
+## Baseline Validation Flow
 
-1. 手動 offset 調整の観察記録
-2. 複数 section を含む `.BBL` の固定 fixture
-3. 追加の失敗系サンプル
-4. ログ形式や DVR 形式の違い
-5. 既知のズレや注意点
+いま固定できている baseline pair は次です。
+
+- `data/BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.BBL`
+- `data/20260308.mp4`
+
+baseline では最低でも次を毎回見直すこと。
+
+1. `.bbl` が読み込める
+2. flight tab が 1 件表示され、継続時間が `01:14.944` と一致する
+3. overlay, compact history, event list がクラッシュせず出る
+4. `20260308.mp4` を attach できる
+5. `Auto sync ARMED` が成功し、`ARMED detected at 2.75s (OCR 96%)` を返す
+6. `Video offset` が `2.749501` 付近に更新される
+
+## Sample Inventory
+
+| ID | Kind | File | Validation Purpose | Expected Observation | Actual Observation | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| LOG-001 | BBL | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.BBL` | Current baseline log for end-to-end review | Log opens, snapshot selectors stay stable, event list renders | Readable. One flight tab shown. Duration observed as `01:14.944`. Overlay and compact history render. Event list showed 12 entries in the current baseline review. | 成功 |
+| LOG-002 | BBL | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.BBL` | Unknown-header warning tolerance | Parser prints warnings but review UI still loads | The baseline log emits many `Ignoring unsupported header ...` warnings and still loads successfully. This currently doubles as the unknown-header sample. | 成功 |
+| LOG-003 | BBL | TBD | AUX / RPM variance or missing-field handling | Missing data should stay explicit and must not be shown as a valid zeroed signal | No fixed sample yet. Need a log where AUX or RPM fields differ from the baseline assumptions. | 未実施 |
+| LOG-004 | BBL | TBD | Multi-section `.BBL` handling | One file should surface as multiple readable flights, with readable sections selectable independently | Covered in adapter unit tests through `loadFlightSessionsFromFile()`, but not yet fixed with a real fixture in `data/`. | 部分成功 |
+| DVR-001 | DVR | `20260308.mp4` | Current baseline DVR for attach + sync | Video attaches, playback remains stable, auto sync can be re-checked from a known clip | Attach succeeds. Local review observed `1920x1080`, `60fps`, `135.808s`. Overlay stays responsive after attach. | 成功 |
+| DVR-002 | DVR | `20260308.mp4` | `ARMED` OCR success path | Auto sync should detect `ARMED` in the early clip and update offset | `Auto sync ARMED` detected `ARMED` at `2.75s` with `OCR 96%` and updated `Video offset` to `2.749501`. | 成功 |
+| DVR-003 | DVR | TBD | `ARMED` OCR failure path | Failure should be explicit and should return the user to manual offset adjustment without crashing | No fixed failure clip yet. Older observations from this same baseline clip are obsolete after the OCR improvements. | 未実施 |
+
+## Current Gaps
+
+1. A real multi-section `.BBL` fixture in `data/`
+2. A real AUX / RPM variance sample
+3. A fixed OCR failure clip
+4. Manual offset adjustment notes after auto sync success and failure
+5. More than one DVR format or OSD style
