@@ -1200,9 +1200,6 @@ export function App() {
   const setStickMiniGraphEnabled = useAppStore(
     (state) => state.setStickMiniGraphEnabled
   );
-  const setStickMiniGraphWindowUs = useAppStore(
-    (state) => state.setStickMiniGraphWindowUs
-  );
   const setOverlayVisibility = useAppStore((state) => state.setOverlayVisibility);
   const resetOverlayVisibility = useAppStore((state) => state.resetOverlayVisibility);
 
@@ -1744,18 +1741,6 @@ export function App() {
               <option value="mode2">{t("app.mode2")}</option>
             </select>
           </label>
-          <select
-            className="rate-select"
-            value={overlayState.stickMiniGraphWindowUs}
-            onChange={(event) =>
-              setStickMiniGraphWindowUs(Number(event.target.value))
-            }
-          >
-            <option value="500000">+-0.5s</option>
-            <option value="1000000">+-1.0s</option>
-            <option value="1500000">+-1.5s</option>
-            <option value="2000000">+-2.0s</option>
-          </select>
         </div>
         {loadErrors.map((error) => (
           <p key={error} className="muted">
