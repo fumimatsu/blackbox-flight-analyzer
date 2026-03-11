@@ -6,3 +6,5 @@ data/*.mp4
 data/*.mov
 data/*.avi
 data/*.webm
+data/*.bbl
+data/*.BBL
