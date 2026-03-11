@@ -1480,11 +1480,13 @@ option:hover {
 
 .diagnostic-card {
   gap: 8px;
+  min-width: 0;
 }
 
 .diagnostic-card__section {
   display: grid;
   gap: 4px;
+  min-width: 0;
 }
 
 .diagnostic-card__section span {
@@ -1497,10 +1499,21 @@ option:hover {
 .diagnostic-card a {
   color: var(--rpm);
   text-decoration: none;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .diagnostic-card a:hover {
   text-decoration: underline;
+}
+
+.diagnostic-card p,
+.diagnostic-card strong,
+.diagnostic-card em,
+.diagnostic-card span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 @media (max-width: 1280px) {
