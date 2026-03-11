@@ -12,41 +12,69 @@ function readFileAsArrayBuffer(file) {
 }
 
 export async function loadFlightSessionFromFile(file) {
-  const bytes = await readFileAsArrayBuffer(file);
-  const logData = new Uint8Array(bytes);
-  const log = new FlightLog(logData);
-  let selectedLogIndex = null;
-
-  for (let index = 0; index < log.getLogCount(); index++) {
-    if (!log.getLogError(index)) {
-      selectedLogIndex = index;
-      break;
-    }
-  }
-
-  if (selectedLogIndex === null) {
+  const result = await loadFlightSessionsFromFile(file);
+  if (!result.sessions.length) {
     throw new Error("No readable log section was found in this file.");
   }
+  return result.sessions[0];
+}
 
-  if (!log.openLog(selectedLogIndex)) {
-    throw new Error(`Failed to open log section #${selectedLogIndex + 1}.`);
+export async function loadFlightSessionsFromFile(file) {
+  const bytes = await readFileAsArrayBuffer(file);
+  const logData = new Uint8Array(bytes);
+  const probeLog = new FlightLog(logData);
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const sessions = [];
+  const unreadableSections = [];
+
+  for (let index = 0; index < probeLog.getLogCount(); index += 1) {
+    const logError = probeLog.getLogError(index);
+
+    if (logError) {
+      unreadableSections.push({
+        logIndex: index,
+        reason: String(logError),
+      });
+      continue;
+    }
+
+    const log = new FlightLog(logData);
+    if (!log.openLog(index)) {
+      unreadableSections.push({
+        logIndex: index,
+        reason: `Failed to open log section #${index + 1}.`,
+      });
+      continue;
+    }
+
+    const logCount = probeLog.getLogCount();
+    const sectionLabel = `Section ${index + 1}`;
+
+    sessions.push({
+      id: `flight-${nextId++}`,
+      name: logCount > 1 ? `${baseName} · ${sectionLabel}` : baseName,
+      shortName: sectionLabel,
+      fileName: file.name,
+      sourceFile: file,
+      log,
+      logIndex: index,
+      logSectionLabel: sectionLabel,
+      totalLogSections: logCount,
+      fieldNames: log.getMainFieldNames(),
+      fieldIndex: log.getMainFieldIndexes(),
+      minTimeUs: log.getMinTime(),
+      maxTimeUs: log.getMaxTime(),
+      durationUs: log.getMaxTime() - log.getMinTime(),
+      numMotors: log.getNumMotors(),
+      createdAt: Date.now(),
+      video: null,
+    });
   }
 
   return {
-    id: `flight-${nextId++}`,
-    name: file.name.replace(/\.[^.]+$/, ""),
-    fileName: file.name,
-    sourceFile: file,
-    log,
-    logIndex: selectedLogIndex,
-    fieldNames: log.getMainFieldNames(),
-    fieldIndex: log.getMainFieldIndexes(),
-    minTimeUs: log.getMinTime(),
-    maxTimeUs: log.getMaxTime(),
-    durationUs: log.getMaxTime() - log.getMinTime(),
-    numMotors: log.getNumMotors(),
-    createdAt: Date.now(),
-    video: null,
+    sessions,
+    unreadableSections,
+    totalLogSections: probeLog.getLogCount(),
   };
 }
 

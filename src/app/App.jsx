@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAppStore } from "./store/useAppStore.js";
 import {
   createVideoAsset,
-  loadFlightSessionFromFile,
+  loadFlightSessionsFromFile,
 } from "../domain/blackbox/adapter/flightLogAdapter.js";
 import {
   clampTime,
@@ -24,6 +24,9 @@ import {
 } from "../domain/sync/autoVideoSync.js";
 
 const OVERLAY_SAMPLE_INTERVAL_US = 25000;
+const MIN_PLAYBACK_RATE = 0.25;
+const MAX_PLAYBACK_RATE = 2;
+const PLAYBACK_RATE_STEP = 0.05;
 
 function formatMicroseconds(timeUs) {
   const totalMs = Math.max(0, Math.round(timeUs / 1000));
@@ -41,6 +44,10 @@ function percent(value, digits = 0) {
     return "n/a";
   }
   return `${value.toFixed(digits)}%`;
+}
+
+function formatPlaybackRate(rate) {
+  return `${rate.toFixed(2).replace(/\.?0+$/, "")}x`;
 }
 
 function signed(value, digits = 1) {
@@ -1143,8 +1150,22 @@ export function App() {
     try {
       for (const file of Array.from(fileList)) {
         try {
-          const flight = await loadFlightSessionFromFile(file);
-          addFlight(flight);
+          const result = await loadFlightSessionsFromFile(file);
+
+          if (!result.sessions.length) {
+            throw new Error("No readable log section was found in this file.");
+          }
+
+          for (const flight of result.sessions) {
+            addFlight(flight);
+          }
+
+          if (result.unreadableSections.length) {
+            setLoadErrors((current) => [
+              ...current,
+              `${file.name}: skipped ${result.unreadableSections.length} unreadable section(s).`,
+            ]);
+          }
         } catch (error) {
           setLoadErrors((current) => [
             ...current,
@@ -1292,16 +1313,23 @@ export function App() {
           >
             Auto sync ARMED
           </button>
-          <select
-            className="rate-select"
-            value={playback.rate}
-            onChange={(event) => setPlaybackRate(Number(event.target.value))}
-          >
-            <option value="0.5">0.5x</option>
-            <option value="1">1x</option>
-            <option value="1.5">1.5x</option>
-            <option value="2">2x</option>
-          </select>
+          <label className="rate-slider">
+            <span className="rate-slider__label">Playback</span>
+            <div className="rate-slider__control">
+              <input
+                className="rate-slider__range"
+                type="range"
+                min={MIN_PLAYBACK_RATE}
+                max={MAX_PLAYBACK_RATE}
+                step={PLAYBACK_RATE_STEP}
+                value={playback.rate}
+                onChange={(event) => setPlaybackRate(Number(event.target.value))}
+              />
+              <strong className="rate-slider__value">
+                {formatPlaybackRate(playback.rate)}
+              </strong>
+            </div>
+          </label>
           <button
             className={`transport ${
               overlayState.stickMiniGraphEnabled ? "" : "transport--muted"
@@ -1342,7 +1370,11 @@ export function App() {
             onClick={() => selectFlight(flight.id)}
           >
             <strong>{flight.name}</strong>
-            <span>{formatMicroseconds(flight.durationUs)}</span>
+            <span>
+              {flight.totalLogSections > 1
+                ? `${flight.logSectionLabel} · ${formatMicroseconds(flight.durationUs)}`
+                : formatMicroseconds(flight.durationUs)}
+            </span>
           </button>
         ))}
       </section>

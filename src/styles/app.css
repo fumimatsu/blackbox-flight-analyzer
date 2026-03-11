@@ -129,6 +129,7 @@ input {
 .file-button--ghost,
 .transport,
 .rate-select,
+.rate-slider,
 .compare-panel select,
 .timeline__controls input {
   background: rgba(255, 255, 255, 0.04);
@@ -150,10 +151,42 @@ input {
 }
 
 .flight-tab {
-  min-width: 180px;
+  min-width: 220px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+}
+
+.rate-slider {
+  display: grid;
+  gap: 6px;
+  min-width: 210px;
+  padding: 10px 14px;
+  border-radius: 18px;
+}
+
+.rate-slider__label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.rate-slider__control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rate-slider__range {
+  flex: 1 1 auto;
+  accent-color: var(--accent);
+}
+
+.rate-slider__value {
+  min-width: 3.4rem;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .flight-tab--active {
