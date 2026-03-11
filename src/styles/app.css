@@ -603,6 +603,7 @@ input {
     radial-gradient(circle at center, rgba(125, 242, 197, 0.08), transparent 58%),
     rgba(255, 255, 255, 0.03);
   overflow: hidden;
+  perspective: 520px;
 }
 
 .attitude-card__ring {
@@ -612,93 +613,167 @@ input {
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
 
-.attitude-card__craft,
-.attitude-card__heading {
+.attitude-card__crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 74px;
+  height: 74px;
+  margin-left: -37px;
+  margin-top: -37px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.attitude-card__crosshair::before,
+.attitude-card__crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.attitude-card__crosshair::before {
+  left: 50%;
+  top: 8px;
+  bottom: 8px;
+  width: 1px;
+  margin-left: -0.5px;
+}
+
+.attitude-card__crosshair::after {
+  top: 50%;
+  left: 8px;
+  right: 8px;
+  height: 1px;
+  margin-top: -0.5px;
+}
+
+.attitude-card__compass {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(232, 239, 245, 0.72);
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.attitude-card__compass--front {
+  top: 9px;
+}
+
+.attitude-card__compass--rear {
+  bottom: 9px;
+}
+
+.attitude-card__craft {
   position: absolute;
   left: 50%;
   top: 50%;
   transform-origin: center;
+  transform-style: preserve-3d;
 }
 
 .attitude-card__craft {
-  width: 70px;
-  height: 70px;
-  margin-left: -35px;
-  margin-top: -35px;
+  width: 92px;
+  height: 92px;
+  margin-left: -46px;
+  margin-top: -46px;
 }
 
 .attitude-card__arm {
   position: absolute;
-  width: 26px;
-  height: 8px;
+  left: 50%;
+  top: 50%;
+  width: 74px;
+  height: 10px;
+  margin-left: -37px;
+  margin-top: -5px;
   border-radius: 999px;
-  background: rgba(152, 190, 255, 0.9);
+  background: linear-gradient(90deg, rgba(255, 215, 106, 0.68), rgba(152, 190, 255, 0.92), rgba(255, 215, 106, 0.68));
 }
 
-.attitude-card__arm--front-left {
-  left: 6px;
-  top: 16px;
-  transform: rotate(-35deg);
+.attitude-card__arm--diag-a {
+  transform: rotate(45deg);
 }
 
-.attitude-card__arm--front-right {
-  right: 6px;
-  top: 16px;
-  transform: rotate(35deg);
+.attitude-card__arm--diag-b {
+  transform: rotate(-45deg);
 }
 
-.attitude-card__arm--rear-left {
-  left: 6px;
-  bottom: 16px;
-  transform: rotate(35deg);
-  background: rgba(255, 215, 106, 0.9);
+.attitude-card__motor {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(6, 12, 18, 0.75);
 }
 
-.attitude-card__arm--rear-right {
-  right: 6px;
-  bottom: 16px;
-  transform: rotate(-35deg);
-  background: rgba(255, 215, 106, 0.9);
+.attitude-card__motor::before {
+  content: "";
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: rgba(6, 12, 18, 0.7);
+}
+
+.attitude-card__motor--front-left {
+  left: 8px;
+  top: 8px;
+  background: rgba(125, 242, 197, 0.96);
+}
+
+.attitude-card__motor--front-right {
+  right: 8px;
+  top: 8px;
+  background: rgba(125, 242, 197, 0.96);
+}
+
+.attitude-card__motor--rear-left {
+  left: 8px;
+  bottom: 8px;
+  background: rgba(255, 215, 106, 0.96);
+}
+
+.attitude-card__motor--rear-right {
+  right: 8px;
+  bottom: 8px;
+  background: rgba(255, 215, 106, 0.96);
 }
 
 .attitude-card__body {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 18px;
-  height: 18px;
-  margin-left: -9px;
-  margin-top: -9px;
-  border-radius: 50%;
-  background: var(--text);
-  box-shadow: 0 0 0 4px rgba(125, 242, 197, 0.14);
+  width: 28px;
+  height: 40px;
+  margin-left: -14px;
+  margin-top: -20px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(125, 242, 197, 0.94), rgba(255, 255, 255, 0.9));
+  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.24);
 }
 
-.attitude-card__heading {
-  width: 0;
-  height: 48px;
-  margin-left: -1px;
-  margin-top: -48px;
-}
-
-.attitude-card__heading::before {
-  content: "";
+.attitude-card__body-core {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 2px;
-  height: 48px;
-  background: linear-gradient(180deg, rgba(125, 242, 197, 0.95), rgba(125, 242, 197, 0.12));
-}
-
-.attitude-card__heading::after {
-  content: "";
-  position: absolute;
-  left: -5px;
-  top: -2px;
+  left: 50%;
+  top: 50%;
   width: 12px;
+  height: 18px;
+  margin-left: -6px;
+  margin-top: -9px;
+  border-radius: 8px;
+  background: rgba(6, 12, 18, 0.82);
+}
+
+.attitude-card__nose {
+  position: absolute;
+  left: 50%;
+  top: 4px;
+  width: 16px;
   height: 12px;
-  background: var(--accent);
+  margin-left: -8px;
+  background: rgba(125, 242, 197, 1);
   clip-path: polygon(50% 0, 0 100%, 100% 100%);
 }
 

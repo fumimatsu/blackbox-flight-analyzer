@@ -244,39 +244,37 @@ function AttitudeIndicator({ attitude }) {
   const roll = attitude?.roll ?? null;
   const pitch = attitude?.pitch ?? null;
   const yaw = normalizeHeadingDegrees(attitude?.yaw ?? null);
-  const pitchOffset = pitch === null ? 0 : Math.max(-28, Math.min(28, pitch * 0.6));
   const rollText = formatMaybeValue(roll, 0, "°");
   const pitchText = formatMaybeValue(pitch, 0, "°");
   const yawText = formatMaybeValue(yaw, 0, "°");
+  const quadStyle = {
+    transform: `rotate(${yaw ?? 0}deg) rotateX(${-(pitch ?? 0) * 0.55}deg) rotateY(${(roll ?? 0) * 0.45}deg)`,
+    opacity: roll === null && pitch === null && yaw === null ? 0.38 : 1,
+  };
 
   return (
     <div className="attitude-card">
       <div className="attitude-card__header">
-        <span>Attitude</span>
+        <span>Quad attitude</span>
         <strong>{yawText}</strong>
       </div>
       <div className="attitude-card__scene">
         <div className="attitude-card__ring" />
-        <div
-          className="attitude-card__craft"
-          style={{
-            transform: `translateY(${pitchOffset}px) rotate(${roll ?? 0}deg)`,
-            opacity: roll === null && pitch === null ? 0.35 : 1,
-          }}
-        >
-          <span className="attitude-card__arm attitude-card__arm--front-left" />
-          <span className="attitude-card__arm attitude-card__arm--front-right" />
-          <span className="attitude-card__arm attitude-card__arm--rear-left" />
-          <span className="attitude-card__arm attitude-card__arm--rear-right" />
-          <span className="attitude-card__body" />
+        <div className="attitude-card__crosshair" />
+        <div className="attitude-card__compass attitude-card__compass--front">Front</div>
+        <div className="attitude-card__compass attitude-card__compass--rear">Rear</div>
+        <div className="attitude-card__craft" style={quadStyle}>
+          <span className="attitude-card__arm attitude-card__arm--diag-a" />
+          <span className="attitude-card__arm attitude-card__arm--diag-b" />
+          <span className="attitude-card__motor attitude-card__motor--front-left" />
+          <span className="attitude-card__motor attitude-card__motor--front-right" />
+          <span className="attitude-card__motor attitude-card__motor--rear-left" />
+          <span className="attitude-card__motor attitude-card__motor--rear-right" />
+          <span className="attitude-card__body">
+            <span className="attitude-card__body-core" />
+            <span className="attitude-card__nose" />
+          </span>
         </div>
-        <div
-          className="attitude-card__heading"
-          style={{
-            transform: `rotate(${yaw ?? 0}deg)`,
-            opacity: yaw === null ? 0.3 : 1,
-          }}
-        />
       </div>
       <div className="attitude-card__values">
         <span>R {rollText}</span>
