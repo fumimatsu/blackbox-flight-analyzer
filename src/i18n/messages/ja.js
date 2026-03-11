@@ -223,6 +223,10 @@ export const jaMessages = {
     title: "レビュー所見",
     description:
       "Betaflight 公式チューニングノートを根拠にした、慎重なルールベース所見です。",
+    scope: "対象",
+    wholeFlight: "フライト全体",
+    wholeFlightDescription: "イベント未選択のため、全体傾向を要約しています。",
+    showWholeFlight: "全体に戻す",
     empty:
       "十分に強い診断ルールはまだ一致していません。穏やかな区間や判断材料不足の区間では正常です。",
     likelyRelatedTo: "Likely related to",

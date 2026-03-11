@@ -223,6 +223,10 @@ export const enMessages = {
     title: "Review Insights",
     description:
       "Rule-based, cautious guidance grounded in Betaflight official tuning notes.",
+    scope: "Scope",
+    wholeFlight: "Whole flight",
+    wholeFlightDescription: "No event selected yet, so the panel summarizes the full review window.",
+    showWholeFlight: "Show whole flight",
     empty:
       "No diagnostic rule matched strongly enough yet. That is expected on calmer or inconclusive sections.",
     likelyRelatedTo: "Likely related to",

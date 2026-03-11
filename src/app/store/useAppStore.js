@@ -10,6 +10,7 @@ export const useAppStore = create((set) => ({
   visibleWindowUs: DEFAULT_WINDOW_US,
   locale: detectInitialLocale(),
   stickMode: "mode2",
+  selectedReviewEventId: null,
   playback: {
     isPlaying: false,
     rate: 1,
@@ -63,6 +64,7 @@ export const useAppStore = create((set) => ({
       return flight
         ? {
             selectedFlightId: flightId,
+            selectedReviewEventId: null,
             currentTimeUs: Math.min(
               Math.max(state.currentTimeUs, flight.minTimeUs),
               flight.maxTimeUs
@@ -87,6 +89,9 @@ export const useAppStore = create((set) => ({
   },
   setStickMode(stickMode) {
     set({ stickMode });
+  },
+  setSelectedReviewEventId(selectedReviewEventId) {
+    set({ selectedReviewEventId });
   },
   setPlayback(isPlaying) {
     set((state) => ({ playback: { ...state.playback, isPlaying } }));

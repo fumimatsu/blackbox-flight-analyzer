@@ -30,6 +30,7 @@ import { SUPPORTED_LOCALES, translate } from "../i18n/index.js";
 import { SetupSummaryPanel } from "./SetupSummaryPanel.jsx";
 
 const OVERLAY_SAMPLE_INTERVAL_US = 25000;
+const DIAGNOSTIC_EVENT_PADDING_US = 300000;
 const MIN_PLAYBACK_RATE = 0.25;
 const MAX_PLAYBACK_RATE = 2;
 const PLAYBACK_RATE_STEP = 0.05;
@@ -367,6 +368,25 @@ function prepareFlight(flight, locale = "en") {
     ...flight,
     window,
     events: detectAnalysisEvents(window, locale),
+  };
+}
+
+function buildDiagnosticFocusFlight(flight, selectedEvent) {
+  if (!flight || !selectedEvent) {
+    return flight;
+  }
+
+  const startUs = Math.max(flight.minTimeUs, selectedEvent.startUs - DIAGNOSTIC_EVENT_PADDING_US);
+  const endUs = Math.min(flight.maxTimeUs, selectedEvent.endUs + DIAGNOSTIC_EVENT_PADDING_US);
+  const focusedWindow = getFlightWindow(flight, startUs, endUs);
+  const overlappingEvents = (flight.events ?? []).filter(
+    (event) => event.startUs <= selectedEvent.endUs && event.endUs >= selectedEvent.startUs
+  );
+
+  return {
+    ...flight,
+    window: focusedWindow,
+    events: overlappingEvents.length ? overlappingEvents : [selectedEvent],
   };
 }
 
@@ -1068,7 +1088,7 @@ function HistoryGraph({ flight, currentTimeUs, t }) {
   );
 }
 
-function EventList({ events, onSelect, t }) {
+function EventList({ events, onSelect, selectedEventId, t }) {
   return (
     <div className="event-list">
       <h3>{t("events.title")}</h3>
@@ -1076,9 +1096,11 @@ function EventList({ events, onSelect, t }) {
         events.slice(0, 12).map((event) => (
           <button
             key={event.id}
-            className="event-list__item"
+            className={`event-list__item ${
+              selectedEventId === event.id ? "event-list__item--active" : ""
+            }`}
             type="button"
-            onClick={() => onSelect(event.startUs)}
+            onClick={() => onSelect(event)}
           >
             <div className="event-list__content">
               <strong>{event.summary}</strong>
@@ -1210,12 +1232,24 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
   );
 }
 
-function DiagnosticPanel({ insights, t }) {
+function DiagnosticPanel({ insights, focusLabel, focusMeta, onClearFocus, isEventFocused, t }) {
   return (
     <aside className="compare-panel diagnostic-panel">
       <div className="compare-panel__header">
         <h3>{t("diagnostics.title")}</h3>
         <p>{t("diagnostics.description")}</p>
+        <div className="diagnostic-panel__scope">
+          <div className="diagnostic-panel__scope-copy">
+            <span>{t("diagnostics.scope")}</span>
+            <strong>{focusLabel}</strong>
+            {focusMeta ? <em>{focusMeta}</em> : null}
+          </div>
+          {isEventFocused ? (
+            <button className="transport transport--ghost" type="button" onClick={onClearFocus}>
+              {t("diagnostics.showWholeFlight")}
+            </button>
+          ) : null}
+        </div>
       </div>
       {insights.length ? (
         <div className="compare-panel__metrics">
@@ -1262,6 +1296,7 @@ export function App() {
   const flights = useAppStore((state) => state.flights);
   const locale = useAppStore((state) => state.locale);
   const stickMode = useAppStore((state) => state.stickMode);
+  const selectedReviewEventId = useAppStore((state) => state.selectedReviewEventId);
   const selectedFlight = useSelectedFlight();
   const setLocale = useAppStore((state) => state.setLocale);
   const setStickMode = useAppStore((state) => state.setStickMode);
@@ -1278,6 +1313,7 @@ export function App() {
   const setCurrentTimeUs = useAppStore((state) => state.setCurrentTimeUs);
   const setPlayback = useAppStore((state) => state.setPlayback);
   const setPlaybackRate = useAppStore((state) => state.setPlaybackRate);
+  const setSelectedReviewEventId = useAppStore((state) => state.setSelectedReviewEventId);
   const setVideoOffset = useAppStore((state) => state.setVideoOffset);
   const setCompareFlight = useAppStore((state) => state.setCompareFlight);
   const setCompareEventType = useAppStore((state) => state.setCompareEventType);
@@ -1296,9 +1332,18 @@ export function App() {
   }, [preparedFlight, currentTimeUs]);
 
   const overlaySummary = snapshot ? getFlightStatusSummary(snapshot, locale) : null;
+  const selectedReviewEvent = useMemo(
+    () =>
+      preparedFlight?.events?.find((event) => event.id === selectedReviewEventId) ?? null,
+    [preparedFlight, selectedReviewEventId]
+  );
+  const diagnosticFlight = useMemo(
+    () => buildDiagnosticFocusFlight(preparedFlight, selectedReviewEvent),
+    [preparedFlight, selectedReviewEvent]
+  );
   const diagnosticInsights = useMemo(
-    () => (preparedFlight ? evaluateDiagnosticRules(preparedFlight, locale) : []),
-    [preparedFlight, locale]
+    () => (diagnosticFlight ? evaluateDiagnosticRules(diagnosticFlight, locale) : []),
+    [diagnosticFlight, locale]
   );
   const stickUsage = useMemo(
     () => (preparedFlight?.window?.samples ? getStickAxisUsage(preparedFlight.window.samples) : null),
@@ -1342,6 +1387,29 @@ export function App() {
     () => (preparedFlight ? getFirstArmedTimeUs(preparedFlight) : null),
     [preparedFlight]
   );
+  const diagnosticScopeLabel = selectedReviewEvent
+    ? selectedReviewEvent.summary
+    : t("diagnostics.wholeFlight");
+  const diagnosticScopeMeta = selectedReviewEvent
+    ? `${formatMicroseconds(selectedReviewEvent.startUs)} - ${formatMicroseconds(
+        selectedReviewEvent.endUs
+      )}`
+    : t("diagnostics.wholeFlightDescription");
+
+  useEffect(() => {
+    if (!preparedFlight?.events?.length) {
+      if (selectedReviewEventId !== null) {
+        setSelectedReviewEventId(null);
+      }
+      return;
+    }
+    if (
+      selectedReviewEventId &&
+      !preparedFlight.events.some((event) => event.id === selectedReviewEventId)
+    ) {
+      setSelectedReviewEventId(null);
+    }
+  }, [preparedFlight, selectedReviewEventId, setSelectedReviewEventId]);
   const metricsWindow = useMemo(() => {
     if (!preparedFlight) {
       return null;
@@ -2113,8 +2181,25 @@ export function App() {
         </section>
 
         <section className="sidecar">
-          <DiagnosticPanel insights={diagnosticInsights} t={t} />
-          <EventList events={preparedFlight.events} onSelect={setCurrentTimeUs} t={t} />
+          <DiagnosticPanel
+            insights={diagnosticInsights}
+            focusLabel={diagnosticScopeLabel}
+            focusMeta={diagnosticScopeMeta}
+            isEventFocused={Boolean(selectedReviewEvent)}
+            onClearFocus={() => setSelectedReviewEventId(null)}
+            t={t}
+          />
+          <EventList
+            events={preparedFlight.events}
+            selectedEventId={selectedReviewEventId}
+            onSelect={(event) => {
+              setCurrentTimeUs(event.startUs);
+              setSelectedReviewEventId(
+                selectedReviewEventId === event.id ? null : event.id
+              );
+            }}
+            t={t}
+          />
           {overlayState.compareOpen ? (
             <ComparePanel
               flights={flights}
