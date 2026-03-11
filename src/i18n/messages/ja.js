@@ -17,7 +17,7 @@ export const jaMessages = {
   },
   app: {
     eyebrow: "Blackbox Flight Analyzer",
-    title: "映像でわかるフライト解析",
+    title: "フライト解析",
     emptyEyebrow: "Blackbox Flight Analyzer",
     emptyTitle: "DVR 主役で Blackbox を解析するビューア",
     emptyBody:
