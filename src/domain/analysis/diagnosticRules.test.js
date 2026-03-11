@@ -37,6 +37,14 @@ function buildFlight({ samples, events }) {
       samples,
     },
     events,
+    setupSummary: {
+      groups: [
+        {
+          key: "idleThrottle",
+          items: [{ key: "dynamicIdleMinRpm", value: "32rpm" }],
+        },
+      ],
+    },
   };
 }
 
@@ -64,8 +72,9 @@ describe("evaluateDiagnosticRules", () => {
     const samples = Array.from({ length: 40 }, (_, index) =>
       buildSample(index * 25000, {
         rc: { throttle: index < 20 ? 18 : 26 },
-        error: { roll: 96, pitch: 84, yaw: 22 },
+        error: { roll: 116, pitch: 84, yaw: 22 },
         motors: [55, 56, 57, 58],
+        rpm: [980 - index * 2, 960 - index * 2, 950 - index * 2, 970 - index * 2],
       })
     );
     const flight = buildFlight({
@@ -78,5 +87,30 @@ describe("evaluateDiagnosticRules", () => {
 
     const insights = evaluateDiagnosticRules(flight);
     expect(insights.map((item) => item.id)).toContain("low-throttle-instability");
+    expect(insights.map((item) => item.id)).toContain("low-throttle-authority");
+  });
+
+  it("falls back to motor/error-only low-throttle evidence when rpm is missing", () => {
+    const samples = Array.from({ length: 30 }, (_, index) =>
+      buildSample(index * 25000, {
+        rc: { throttle: index < 15 ? 10 : 28 },
+        error: { roll: 128, pitch: 94, yaw: 22 },
+        motors: [42, 44, 45, 43],
+        rpm: [],
+      })
+    );
+    const flight = buildFlight({
+      samples,
+      events: [
+        { type: EVENT_TYPES.CHOP_TURN, startUs: 0, endUs: 220000 },
+        { type: EVENT_TYPES.HIGH_ERROR_BURST, startUs: 0, endUs: 220000 },
+      ],
+    });
+
+    const insights = evaluateDiagnosticRules(flight);
+    expect(insights.map((item) => item.id)).toContain("low-throttle-instability");
+    expect(
+      insights.find((item) => item.id === "low-throttle-instability")?.evidenceSummary
+    ).toContain("RPM");
   });
 });

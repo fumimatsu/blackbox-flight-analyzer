@@ -165,6 +165,8 @@ export const enMessages = {
       "Useful for spotting instability when throttle drops into a turn.",
     chopTurnDetail:
       "Throttle dropped into a turn. Peak turn input {peakTurnInput}",
+    chopTurnDetailLowThrottle:
+      "Throttle dropped into a turn. Peak turn {peakTurnInput}, RPM floor {rpmFloor}, recovery {recoveryTimeMs}ms, error peak {errorPeak}°/s",
     loadedRollArc: "Loaded roll arc",
     loadedRollArcReason:
       "Useful for checking loaded-turn tracking under sustained roll demand.",
@@ -175,11 +177,14 @@ export const enMessages = {
       "Useful when tracking error spikes without obvious motor saturation.",
     highErrorBurstDetail:
       "Tracking error peaked at {peakError}°/s without saturation",
+    highErrorBurstDetailLowThrottle:
+      "Tracking error peaked at {peakError}°/s near low throttle. RPM floor {rpmFloor}, recovery {recoveryTimeMs}ms",
     saturationBurst: "Headroom-limited burst",
     saturationBurstReason:
       "Useful for locating moments where motors appear to max out.",
     saturationBurstDetail:
       "Motor headroom looked limited. Peak motor {peakMotor}%",
+    lowThrottleNoRpm: "RPM unavailable; using motor/error only",
   },
   compare: {
     title: "Compare",
@@ -246,13 +251,28 @@ export const enMessages = {
       "If this shows up only in specific loaded turns, compare the same event after setup changes.",
     lowThrottleLabel: "Low-throttle instability worth checking",
     lowThrottleEvidence:
-      "Consistent with instability after throttle reduction. Mean low-throttle error {value}°/s with little saturation.",
+      "Consistent with instability after throttle reduction. Mean low-throttle error {value}°/s, RPM floor {rpmFloor}, recovery {recovery}ms, with little saturation.",
+    lowThrottleEvidenceNoRpm:
+      "Consistent with instability after throttle reduction. Mean low-throttle error {value}°/s and recovery {recovery}ms. RPM unavailable, so this review falls back to motor/error only.",
     lowThrottleCheck1:
       "Check D-term authority versus filter delay if chops and low-throttle turns look messy.",
     lowThrottleCheck2:
       "Check RPM / dynamic notch setup if noise control still forces high filter delay.",
     lowThrottleCheck3:
       "Check low-throttle motor behavior and dynamic idle before making large PID changes.",
+    lowThrottleAuthorityLabel: "Low-throttle authority worth checking",
+    lowThrottleAuthorityEvidence:
+      "Low-throttle authority looks weaker than expected. RPM floor {rpmFloor}, recovery {recovery}ms. {dynamicIdle}",
+    lowThrottleAuthorityEvidenceNoRpm:
+      "Low-throttle authority may be weaker than expected. Recovery {recovery}ms and recovery error peak {errorPeak}°/s. {dynamicIdle}",
+    lowThrottleAuthorityCheck1:
+      "Check Dynamic Idle, idle behavior, and whether low-throttle recovery improves after setup changes.",
+    lowThrottleAuthorityCheck2:
+      "Check ESC / motor behavior if zero-throttle recovery still looks rough even without obvious saturation.",
+    lowThrottleAuthorityCheck3:
+      "Compare the same chop-turn scene before blaming filters alone; low-throttle authority problems often look scene-specific.",
+    dynamicIdleConfigured: "Dynamic Idle configured: {value}",
+    dynamicIdleUnknown: "No Dynamic Idle setting found in the embedded config.",
   },
   status: {
     settled: "Settled",

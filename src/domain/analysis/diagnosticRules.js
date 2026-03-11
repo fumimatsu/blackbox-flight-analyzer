@@ -1,4 +1,8 @@
-import { getErrorMagnitude, getFlightStatusSummary } from "../blackbox/derived/flightDerived.js";
+import {
+  getErrorMagnitude,
+  getFlightStatusSummary,
+  getLowThrottleReviewSummary,
+} from "../blackbox/derived/flightDerived.js";
 import { EVENT_TYPES } from "../blackbox/events/eventConfig.js";
 import { translate } from "../../i18n/index.js";
 
@@ -25,6 +29,7 @@ function max(values) {
 function buildEvidence(flight, locale) {
   const samples = flight?.window?.samples ?? [];
   const events = flight?.events ?? [];
+  const setupSummary = flight?.setupSummary ?? null;
 
   const statuses = samples.map((sample) => getFlightStatusSummary(sample, locale));
   const errorMagnitudes = samples
@@ -37,10 +42,15 @@ function buildEvidence(flight, locale) {
   const motorPeaks = statuses
     .map((status) => status.motor.max)
     .filter((value) => value !== null);
+  const lowThrottleSummary = getLowThrottleReviewSummary(samples);
+  const dynamicIdleItem = setupSummary?.groups
+    ?.find((group) => group.key === "idleThrottle")
+    ?.items?.find((item) => item.key === "dynamicIdleMinRpm");
 
   return {
     samples,
     events,
+    setupSummary,
     totalSamples: samples.length,
     eventCounts: events.reduce((counts, event) => {
       counts[event.type] = (counts[event.type] ?? 0) + 1;
@@ -51,6 +61,8 @@ function buildEvidence(flight, locale) {
     lowThrottleErrorMean: mean(lowThrottleErrors),
     peakError: max(errorMagnitudes),
     peakMotor: max(motorPeaks),
+    lowThrottleSummary,
+    dynamicIdleConfigured: dynamicIdleItem?.value ?? null,
   };
 }
 
@@ -107,8 +119,17 @@ export const DIAGNOSTIC_RULES = [
       );
     },
     evidenceSummary(evidence, locale) {
+      if (!evidence.lowThrottleSummary.hasRpmData) {
+        return translate(locale, "diagnostics.lowThrottleEvidenceNoRpm", {
+          value: (evidence.lowThrottleErrorMean ?? 0).toFixed(1),
+          recovery: Math.round(evidence.lowThrottleSummary.recoveryTimeMs ?? 0),
+        });
+      }
+
       return translate(locale, "diagnostics.lowThrottleEvidence", {
         value: (evidence.lowThrottleErrorMean ?? 0).toFixed(1),
+        rpmFloor: Math.round(evidence.lowThrottleSummary.rpmFloorMin ?? 0),
+        recovery: Math.round(evidence.lowThrottleSummary.recoveryTimeMs ?? 0),
       });
     },
     likelyCheckKeys: [
@@ -120,11 +141,70 @@ export const DIAGNOSTIC_RULES = [
       const score = Math.min(
         1,
         ((evidence.lowThrottleErrorMean ?? 0) / 140) +
+          ((evidence.lowThrottleSummary.recoveryTimeMs ?? 0) / 350) +
           ((evidence.eventCounts[EVENT_TYPES.CHOP_TURN] ?? 0) >= 2 ? 0.2 : 0.1)
       );
       return confidenceLabel(score);
     },
     officialSources: [OFFICIAL_SOURCES.freestyle, OFFICIAL_SOURCES.tuning42],
+  },
+  {
+    id: "low-throttle-authority",
+    labelKey: "diagnostics.lowThrottleAuthorityLabel",
+    eventTypes: [EVENT_TYPES.CHOP_TURN, EVENT_TYPES.HIGH_ERROR_BURST],
+    predicate(evidence) {
+      return (
+        (evidence.eventCounts[EVENT_TYPES.CHOP_TURN] ?? 0) >= 1 &&
+        evidence.saturationShare < 0.08 &&
+        evidence.lowThrottleSummary.lowThrottleSamples >= 3 &&
+        (
+          (evidence.lowThrottleSummary.hasRpmData &&
+            (evidence.lowThrottleSummary.rpmFloorMin ?? Infinity) <= 1000 &&
+            (evidence.lowThrottleSummary.recoveryTimeMs ?? 0) >= 120) ||
+          (!evidence.lowThrottleSummary.hasRpmData &&
+            (evidence.lowThrottleSummary.recoveryErrorPeak ?? 0) >= 110)
+        )
+      );
+    },
+    evidenceSummary(evidence, locale) {
+      const dynamicIdleState = evidence.dynamicIdleConfigured
+        ? translate(locale, "diagnostics.dynamicIdleConfigured", {
+            value: evidence.dynamicIdleConfigured,
+          })
+        : translate(locale, "diagnostics.dynamicIdleUnknown");
+
+      if (!evidence.lowThrottleSummary.hasRpmData) {
+        return translate(locale, "diagnostics.lowThrottleAuthorityEvidenceNoRpm", {
+          recovery: Math.round(evidence.lowThrottleSummary.recoveryTimeMs ?? 0),
+          errorPeak: Math.round(evidence.lowThrottleSummary.recoveryErrorPeak ?? 0),
+          dynamicIdle: dynamicIdleState,
+        });
+      }
+
+      return translate(locale, "diagnostics.lowThrottleAuthorityEvidence", {
+        rpmFloor: Math.round(evidence.lowThrottleSummary.rpmFloorMin ?? 0),
+        recovery: Math.round(evidence.lowThrottleSummary.recoveryTimeMs ?? 0),
+        dynamicIdle: dynamicIdleState,
+      });
+    },
+    likelyCheckKeys: [
+      "diagnostics.lowThrottleAuthorityCheck1",
+      "diagnostics.lowThrottleAuthorityCheck2",
+      "diagnostics.lowThrottleAuthorityCheck3",
+    ],
+    confidence(evidence) {
+      const score = Math.min(
+        1,
+        ((evidence.lowThrottleSummary.recoveryTimeMs ?? 0) / 260) +
+          (
+            evidence.lowThrottleSummary.hasRpmData
+              ? Math.max(0, (1200 - (evidence.lowThrottleSummary.rpmFloorMin ?? 1200)) / 400)
+              : Math.max(0, (evidence.lowThrottleSummary.recoveryErrorPeak ?? 0) / 180)
+          )
+      );
+      return confidenceLabel(score);
+    },
+    officialSources: [OFFICIAL_SOURCES.freestyle, OFFICIAL_SOURCES.tuning43],
   },
 ];
 

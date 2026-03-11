@@ -1,4 +1,8 @@
-import { getErrorMagnitude, getFlightStatusSummary } from "../derived/flightDerived.js";
+import {
+  getErrorMagnitude,
+  getFlightStatusSummary,
+  getLowThrottleReviewSummary,
+} from "../derived/flightDerived.js";
 import { EVENT_CONFIG, EVENT_TYPES } from "./eventConfig.js";
 import { translate } from "../../../i18n/index.js";
 
@@ -10,7 +14,7 @@ function axisPeak(values) {
   return Math.max(...numbers.map((value) => Math.abs(value)));
 }
 
-function summarizeSegment(type, samples, locale) {
+function summarizeSegment(type, samples, locale, lowThrottleContext = null) {
   const config = EVENT_CONFIG[type];
   const peakError = Math.round(
     Math.max(...samples.map((sample) => sample.errorMagnitude ?? 0))
@@ -34,7 +38,16 @@ function summarizeSegment(type, samples, locale) {
     case EVENT_TYPES.CHOP_TURN:
       return {
         summary: translate(locale, config.labelKey),
-        detail: translate(locale, "events.chopTurnDetail", { peakTurnInput }),
+        detail: lowThrottleContext
+          ? translate(locale, "events.chopTurnDetailLowThrottle", {
+              peakTurnInput,
+              rpmFloor: lowThrottleContext.hasRpmData
+                ? Math.round(lowThrottleContext.rpmFloor ?? 0)
+                : translate(locale, "events.lowThrottleNoRpm"),
+              recoveryTimeMs: Math.round(lowThrottleContext.recoveryTimeMs ?? 0),
+              errorPeak: Math.round(lowThrottleContext.errorPeak ?? 0),
+            })
+          : translate(locale, "events.chopTurnDetail", { peakTurnInput }),
       };
     case EVENT_TYPES.LOADED_ROLL_ARC:
       return {
@@ -44,7 +57,16 @@ function summarizeSegment(type, samples, locale) {
     case EVENT_TYPES.HIGH_ERROR_BURST:
       return {
         summary: translate(locale, config.labelKey),
-        detail: translate(locale, "events.highErrorBurstDetail", { peakError }),
+        detail:
+          lowThrottleContext && lowThrottleContext.lowThrottleSamples > 0
+            ? translate(locale, "events.highErrorBurstDetailLowThrottle", {
+                peakError,
+                rpmFloor: lowThrottleContext.hasRpmData
+                  ? Math.round(lowThrottleContext.rpmFloor ?? 0)
+                  : translate(locale, "events.lowThrottleNoRpm"),
+                recoveryTimeMs: Math.round(lowThrottleContext.recoveryTimeMs ?? 0),
+              })
+            : translate(locale, "events.highErrorBurstDetail", { peakError }),
       };
     case EVENT_TYPES.SATURATION_BURST:
       return {
@@ -71,7 +93,28 @@ function finalizeSegment(events, type, startUs, endUs, samples, locale) {
   }
 
   const severity = samples.reduce((peak, sample) => Math.max(peak, sample.score ?? 0), 0);
-  const summary = summarizeSegment(type, samples, locale);
+  const lowThrottleSummary =
+    type === EVENT_TYPES.CHOP_TURN ||
+    (type === EVENT_TYPES.HIGH_ERROR_BURST &&
+      samples.some(
+        (sample) =>
+          sample.rc.throttle !== null &&
+          sample.rc.throttle !== undefined &&
+          !Number.isNaN(sample.rc.throttle) &&
+          sample.rc.throttle <= 20
+      ))
+      ? getLowThrottleReviewSummary(samples)
+      : null;
+  const lowThrottleContext = lowThrottleSummary
+    ? {
+        lowThrottleSamples: lowThrottleSummary.lowThrottleSamples,
+        hasRpmData: lowThrottleSummary.hasRpmData,
+        rpmFloor: lowThrottleSummary.rpmFloorMin,
+        recoveryTimeMs: lowThrottleSummary.recoveryTimeMs,
+        errorPeak: lowThrottleSummary.recoveryErrorPeak,
+      }
+    : null;
+  const summary = summarizeSegment(type, samples, locale, lowThrottleContext);
 
   events.push({
     id: `${type}-${startUs}`,
@@ -84,6 +127,7 @@ function finalizeSegment(events, type, startUs, endUs, samples, locale) {
     summary: summary.summary,
     detail: summary.detail,
     reviewReason: translate(locale, config.reviewReasonKey),
+    lowThrottleContext,
   });
 }
 

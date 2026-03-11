@@ -364,8 +364,10 @@ function prepareFlight(flight, locale = "en") {
     return null;
   }
   const window = getFlightWindow(flight, flight.minTimeUs, flight.maxTimeUs);
+  const setupSummary = getFlightSetupSummary(flight);
   return {
     ...flight,
+    setupSummary,
     window,
     events: detectAnalysisEvents(window, locale),
   };
@@ -1349,10 +1351,7 @@ export function App() {
     () => (preparedFlight?.window?.samples ? getStickAxisUsage(preparedFlight.window.samples) : null),
     [preparedFlight]
   );
-  const setupSummary = useMemo(
-    () => (preparedFlight ? getFlightSetupSummary(preparedFlight) : null),
-    [preparedFlight]
-  );
+  const setupSummary = preparedFlight?.setupSummary ?? null;
 
   const trailSamples = useMemo(() => {
     if (!preparedFlight || !snapshot) {

@@ -128,3 +128,185 @@ export function getStickAxisUsage(samples) {
     pitch: summarizeStickAxis(samples, "pitch"),
   };
 }
+
+function getSampleRpmFloor(sample) {
+  const rpmValues = (sample?.rpm ?? []).filter(
+    (value) => value !== null && value !== undefined && !Number.isNaN(value)
+  );
+  if (!rpmValues.length) {
+    return null;
+  }
+  return Math.min(...rpmValues);
+}
+
+function getSampleMotorFloor(sample) {
+  const motorValues = (sample?.motors ?? []).filter(
+    (value) => value !== null && value !== undefined && !Number.isNaN(value)
+  );
+  if (!motorValues.length) {
+    return null;
+  }
+  return Math.min(...motorValues);
+}
+
+function average(values) {
+  if (!values.length) {
+    return null;
+  }
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function getLowThrottleReviewSummary(samples, options = {}) {
+  const idleThrottle = options.idleThrottleThreshold ?? 5;
+  const lowThrottle = options.lowThrottleThreshold ?? 20;
+  const recoveryWindowUs = options.recoveryWindowUs ?? 300000;
+
+  const lowThrottleSamples = samples.filter(
+    (sample) =>
+      sample?.rc?.throttle !== null &&
+      sample?.rc?.throttle !== undefined &&
+      !Number.isNaN(sample.rc.throttle) &&
+      sample.rc.throttle <= lowThrottle
+  );
+  const zeroThrottleSamples = lowThrottleSamples.filter(
+    (sample) => sample.rc.throttle <= idleThrottle
+  );
+  const hasRpmData = lowThrottleSamples.some((sample) => getSampleRpmFloor(sample) !== null);
+
+  const rpmFloors = lowThrottleSamples
+    .map((sample) => getSampleRpmFloor(sample))
+    .filter((value) => value !== null);
+  const motorFloors = lowThrottleSamples
+    .map((sample) => getSampleMotorFloor(sample))
+    .filter((value) => value !== null);
+
+  const recoveryWindows = [];
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const previousThrottle = previous?.rc?.throttle;
+    const currentThrottle = current?.rc?.throttle;
+
+    if (
+      previousThrottle === null ||
+      previousThrottle === undefined ||
+      currentThrottle === null ||
+      currentThrottle === undefined ||
+      Number.isNaN(previousThrottle) ||
+      Number.isNaN(currentThrottle)
+    ) {
+      continue;
+    }
+
+    if (!(previousThrottle <= lowThrottle && currentThrottle > lowThrottle)) {
+      continue;
+    }
+
+    const lowSegment = [];
+    let lowIndex = index - 1;
+    while (lowIndex >= 0) {
+      const sample = samples[lowIndex];
+      if (
+        sample?.rc?.throttle === null ||
+        sample?.rc?.throttle === undefined ||
+        Number.isNaN(sample.rc.throttle) ||
+        sample.rc.throttle > lowThrottle
+      ) {
+        break;
+      }
+      lowSegment.unshift(sample);
+      lowIndex -= 1;
+    }
+
+    const baselineRpmFloor = average(
+      lowSegment
+        .map((sample) => getSampleRpmFloor(sample))
+        .filter((value) => value !== null)
+    );
+    const baselineMotorFloor = average(
+      lowSegment
+        .map((sample) => getSampleMotorFloor(sample))
+        .filter((value) => value !== null)
+    );
+
+    const windowSamples = [];
+    let endIndex = index;
+    while (endIndex < samples.length) {
+      const sample = samples[endIndex];
+      if ((sample.timeUs ?? 0) - current.timeUs > recoveryWindowUs) {
+        break;
+      }
+      windowSamples.push(sample);
+      endIndex += 1;
+    }
+
+    const rpmDip = windowSamples
+      .map((sample) => getSampleRpmFloor(sample))
+      .filter((value) => value !== null);
+    const errorPeaks = windowSamples
+      .map((sample) => getErrorMagnitude(sample.error))
+      .filter((value) => value !== null);
+
+    let recoveredAtUs = null;
+    for (const sample of windowSamples) {
+      const sampleRpmFloor = getSampleRpmFloor(sample);
+      const sampleError = getErrorMagnitude(sample.error);
+      const rpmRecovered =
+        baselineRpmFloor === null ||
+        sampleRpmFloor === null ||
+        sampleRpmFloor >= baselineRpmFloor * 0.9;
+      const errorRecovered = sampleError === null || sampleError <= 90;
+      if (rpmRecovered && errorRecovered) {
+        recoveredAtUs = sample.timeUs;
+        break;
+      }
+    }
+
+    const endUs =
+      recoveredAtUs ??
+      windowSamples[windowSamples.length - 1]?.timeUs ??
+      current.timeUs;
+
+    recoveryWindows.push({
+      startUs: current.timeUs,
+      endUs,
+      recoveryTimeMs: Math.max(0, (endUs - current.timeUs) / 1000),
+      rpmDip: rpmDip.length ? Math.min(...rpmDip) : null,
+      motorFloor:
+        average(
+          windowSamples
+            .map((sample) => getSampleMotorFloor(sample))
+            .filter((value) => value !== null)
+        ) ?? baselineMotorFloor,
+      errorPeak: errorPeaks.length ? Math.max(...errorPeaks) : null,
+      baselineRpmFloor,
+      baselineMotorFloor,
+    });
+  }
+
+  return {
+    lowThrottleSamples: lowThrottleSamples.length,
+    zeroThrottleSamples: zeroThrottleSamples.length,
+    rpmFloor: rpmFloors.length ? Math.min(...rpmFloors) : null,
+    rpmFloorMin: rpmFloors.length ? Math.min(...rpmFloors) : null,
+    rpmFloorAvg: average(rpmFloors),
+    motorFloor: motorFloors.length ? Math.min(...motorFloors) : null,
+    recoveryWindows,
+    recoveryErrorPeak: recoveryWindows.reduce(
+      (peak, window) =>
+        window.errorPeak === null ? peak : Math.max(peak ?? 0, window.errorPeak),
+      null
+    ),
+    recoveryRpmDip: recoveryWindows.reduce(
+      (dip, window) =>
+        window.rpmDip === null ? dip : Math.min(dip ?? window.rpmDip, window.rpmDip),
+      null
+    ),
+    recoveryTimeMs: recoveryWindows.reduce(
+      (peak, window) => Math.max(peak, window.recoveryTimeMs ?? 0),
+      0
+    ),
+    hasRpmData,
+  };
+}

@@ -76,4 +76,38 @@ describe("detectAnalysisEvents", () => {
     expect(events).toHaveLength(1);
     expect(events[0].type).toBe(EVENT_TYPES.LOADED_ROLL_ARC);
   });
+
+  it("adds low-throttle context to chop turns", () => {
+    const samples = [
+      buildSample(0, { rc: { throttle: 72 } }),
+      buildSample(40000, { rc: { throttle: 24, roll: 180 }, rpm: [980, 960, 950, 970] }),
+      buildSample(80000, { rc: { throttle: 68 } }),
+      buildSample(120000, { rc: { throttle: 18, roll: 230 }, rpm: [930, 910, 900, 920] }),
+      buildSample(160000, { rc: { throttle: 64 } }),
+      buildSample(200000, {
+        rc: { throttle: 16, roll: 190 },
+        rpm: [920, 910, 900, 930],
+      }),
+      buildSample(240000, { rc: { throttle: 62 } }),
+      buildSample(300000, {
+        rc: { throttle: 14, roll: 210 },
+        rpm: [860, 850, 840, 870],
+        error: { roll: 128, pitch: 20, yaw: 12 },
+      }),
+      buildSample(340000, { rc: { throttle: 34, roll: 120 }, rpm: [1040, 1030, 1020, 1050] }),
+    ];
+
+    const events = detectAnalysisEvents({ samples });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe(EVENT_TYPES.CHOP_TURN);
+    expect(events[0].lowThrottleContext).toEqual(
+      expect.objectContaining({
+        hasRpmData: true,
+        lowThrottleSamples: 3,
+        rpmFloor: 840,
+      })
+    );
+    expect(events[0].detail).toContain("RPM floor");
+  });
 });

@@ -165,6 +165,8 @@ export const jaMessages = {
       "スロットルを抜いて曲げたときの不安定さを見つけるのに向いています。",
     chopTurnDetail:
       "スロットルを落としてターンに入りました。最大ターン入力 {peakTurnInput}",
+    chopTurnDetailLowThrottle:
+      "スロットルを落としてターン。最大ターン入力 {peakTurnInput}、RPM floor {rpmFloor}、回復 {recoveryTimeMs}ms、誤差ピーク {errorPeak}°/s",
     loadedRollArc: "荷重ロールアーク",
     loadedRollArcReason:
       "スロットルを残したロールターン中の追従を見返すのに向いています。",
@@ -175,11 +177,14 @@ export const jaMessages = {
       "モーター飽和が主因でない追従エラーの急増を見つけるのに向いています。",
     highErrorBurstDetail:
       "飽和なしで追従誤差が {peakError}°/s まで上がりました",
+    highErrorBurstDetailLowThrottle:
+      "低スロットル付近で追従誤差が {peakError}°/s まで上昇。RPM floor {rpmFloor}、回復 {recoveryTimeMs}ms",
     saturationBurst: "Headroom 制限バースト",
     saturationBurstReason:
       "モーターが張り付き気味になる区間を探すのに向いています。",
     saturationBurstDetail:
       "モーターヘッドルームが不足気味でした。最大モーター出力 {peakMotor}%",
+    lowThrottleNoRpm: "RPM unavailable; motor/error only",
   },
   compare: {
     title: "比較",
@@ -246,13 +251,28 @@ export const jaMessages = {
       "特定の loaded turn だけで出るなら、同じイベントを setup 変更前後で見比べてください。",
     lowThrottleLabel: "低スロットル時の不安定さを要確認",
     lowThrottleEvidence:
-      "スロットルを抜いた後の不安定さと整合します。低スロットル帯の平均誤差 {value}°/s、飽和は少なめです。",
+      "スロットルを抜いた後の不安定さと整合します。低スロットル帯の平均誤差 {value}°/s、RPM floor {rpmFloor}、回復 {recovery}ms、飽和は少なめです。",
+    lowThrottleEvidenceNoRpm:
+      "スロットルを抜いた後の不安定さと整合します。低スロットル帯の平均誤差 {value}°/s、回復 {recovery}ms。RPM が無いため motor/error ベースの判定です。",
     lowThrottleCheck1:
       "chop や低スロットルターンが荒れるなら、D-term と filter delay のバランスを確認してください。",
     lowThrottleCheck2:
       "ノイズ対策のために filter delay が大きいなら、RPM / dynamic notch の状態も確認してください。",
     lowThrottleCheck3:
       "大きく PID を触る前に、低スロットル時のモーター挙動と dynamic idle を確認してください。",
+    lowThrottleAuthorityLabel: "低スロットル時の姿勢保持を要確認",
+    lowThrottleAuthorityEvidence:
+      "低スロットル時の姿勢保持が弱めに見えます。RPM floor {rpmFloor}、回復 {recovery}ms。{dynamicIdle}",
+    lowThrottleAuthorityEvidenceNoRpm:
+      "低スロットル時の姿勢保持が弱めの可能性があります。回復 {recovery}ms、回復中の誤差ピーク {errorPeak}°/s。{dynamicIdle}",
+    lowThrottleAuthorityCheck1:
+      "Dynamic Idle や idle 周りの設定を確認し、同じシーンで recovery が改善するか見てください。",
+    lowThrottleAuthorityCheck2:
+      "明確な飽和がないのに recovery が荒いなら、ESC / motor 側の低スロットル挙動も確認してください。",
+    lowThrottleAuthorityCheck3:
+      "filter だけで説明せず、同じ chop turn を setup 変更前後で見比べてください。",
+    dynamicIdleConfigured: "Dynamic Idle 設定: {value}",
+    dynamicIdleUnknown: "埋め込み設定から Dynamic Idle 値は見つかりませんでした。",
   },
   status: {
     settled: "安定",
