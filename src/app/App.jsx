@@ -762,7 +762,7 @@ function EventTimelineCard({
     <div className="event-timeline">
       <div className="event-timeline__header">
         <span>{t("overlay.events")}</span>
-        <strong>{events.length ? `${events.length}` : t("overlay.noData")}</strong>
+        <strong>{events.length ? `${events.length}` : "0"}</strong>
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="event-timeline__chart">
         <rect x="0" y="0" width={width} height={height} className="event-timeline__bg" />
