@@ -6,15 +6,16 @@ Video-first Blackbox review app for pilots who want to understand what happened 
 
 ## Why this exists
 
-Traditional Blackbox tools are strong at raw graphs, but they make it easy to lose the flight context.
+Existing Blackbox viewers can already overlay flight data on top of DVR footage.
 
-This app puts the DVR first and overlays the flight data directly on top of the video so you can review:
+Blackbox Flight Analyzer is aimed at making that experience more readable and more actionable:
 
-- what stick input was given
-- how setpoint, gyro, and error behaved
-- when motor headroom tightened up
-- which moments are worth re-opening as events
-- how one flight or setup differs from another
+- the DVR remains the primary surface
+- overlays are tuned for quick visual understanding
+- event detection helps surface the parts of a flight worth reopening
+- comparison workflows make setup changes easier to judge
+
+Instead of asking the pilot to hunt through the whole timeline, the app tries to make the important moments easier to spot and easier to review.
 
 ## What you can do
 
