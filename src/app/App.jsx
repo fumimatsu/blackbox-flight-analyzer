@@ -87,6 +87,19 @@ function mapMaybePoint(xValue, yValue) {
   return { x: xValue, y: yValue };
 }
 
+function getTimeCursorX(currentTimeUs, startUs, endUs, width) {
+  if (
+    currentTimeUs === null ||
+    currentTimeUs === undefined ||
+    Number.isNaN(currentTimeUs)
+  ) {
+    return width / 2;
+  }
+  const rangeUs = Math.max(endUs - startUs, 1);
+  const ratio = Math.max(0, Math.min(1, (currentTimeUs - startUs) / rangeUs));
+  return ratio * width;
+}
+
 function useSelectedFlight() {
   return useAppStore((state) =>
     state.flights.find((flight) => flight.id === state.selectedFlightId) ?? null
@@ -198,27 +211,26 @@ function StickOverlay({
   );
 }
 
-function StatusPill({ label, value, accent = "neutral" }) {
+function StatusPill({ label, value, accent = "neutral", compact = false }) {
   return (
-    <div className={`status-pill status-pill--${accent}`}>
+    <div className={`status-pill status-pill--${accent} ${compact ? "status-pill--compact" : ""}`}>
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
   );
 }
 
-function TinyMetric({ label, value }) {
-  return (
-    <div className="tiny-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
+function thresholdY(value, minValue, maxValue, height) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+  const clamped = Math.max(minValue, Math.min(maxValue, value));
+  return height - ((clamped - minValue) / Math.max(maxValue - minValue, 1)) * height;
 }
 
 function polylinePoints(samples, valueSelector, width, height) {
   const indexed = samples
-    .map((sample, index) => ({ index, value: valueSelector(sample) }))
+    .map((sample, index) => ({ index, sample, value: valueSelector(sample) }))
     .filter(({ value }) => value !== null && value !== undefined && !Number.isNaN(value));
 
   if (!indexed.length) {
@@ -228,9 +240,15 @@ function polylinePoints(samples, valueSelector, width, height) {
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
+  const startTimeUs = samples[0]?.timeUs ?? 0;
+  const endTimeUs = samples[samples.length - 1]?.timeUs ?? startTimeUs;
+  const timeRangeUs = Math.max(endTimeUs - startTimeUs, 1);
   return indexed
-    .map(({ index, value }) => {
-      const x = (index / Math.max(samples.length - 1, 1)) * width;
+    .map(({ index, sample, value }) => {
+      const x =
+        sample.timeUs !== undefined
+          ? ((sample.timeUs - startTimeUs) / timeRangeUs) * width
+          : (index / Math.max(samples.length - 1, 1)) * width;
       const y = height - ((value - min) / range) * height;
       return `${x},${y}`;
     })
@@ -246,7 +264,7 @@ function fixedScalePolylinePoints(
   maxValue
 ) {
   const indexed = samples
-    .map((sample, index) => ({ index, value: valueSelector(sample) }))
+    .map((sample, index) => ({ index, sample, value: valueSelector(sample) }))
     .filter(({ value }) => value !== null && value !== undefined && !Number.isNaN(value));
 
   if (!indexed.length) {
@@ -254,9 +272,15 @@ function fixedScalePolylinePoints(
   }
 
   const range = maxValue - minValue || 1;
+  const startTimeUs = samples[0]?.timeUs ?? 0;
+  const endTimeUs = samples[samples.length - 1]?.timeUs ?? startTimeUs;
+  const timeRangeUs = Math.max(endTimeUs - startTimeUs, 1);
   return indexed
-    .map(({ index, value }) => {
-      const x = (index / Math.max(samples.length - 1, 1)) * width;
+    .map(({ index, sample, value }) => {
+      const x =
+        sample.timeUs !== undefined
+          ? ((sample.timeUs - startTimeUs) / timeRangeUs) * width
+          : (index / Math.max(samples.length - 1, 1)) * width;
       const clampedValue = Math.max(minValue, Math.min(maxValue, value));
       const y = height - ((clampedValue - minValue) / range) * height;
       return `${x},${y}`;
@@ -264,32 +288,270 @@ function fixedScalePolylinePoints(
     .join(" ");
 }
 
-function StickHistoryMini({ channels, width = 250, height = 54 }) {
+function multiPolylinePoints(seriesList, width, height, minValue, maxValue) {
+  const range = maxValue - minValue || 1;
+
+  return seriesList.map((series) => {
+    const startTimeUs = series.samples[0]?.timeUs ?? 0;
+    const endTimeUs = series.samples[series.samples.length - 1]?.timeUs ?? startTimeUs;
+    const timeRangeUs = Math.max(endTimeUs - startTimeUs, 1);
+    const indexed = series.samples
+      .map((sample, index) => ({ index, sample, value: series.valueSelector(sample) }))
+      .filter(({ value }) => value !== null && value !== undefined && !Number.isNaN(value));
+
+    return {
+      key: series.key,
+      className: series.className,
+      points: indexed
+        .map(({ index, sample, value }) => {
+          const x =
+            sample.timeUs !== undefined
+              ? ((sample.timeUs - startTimeUs) / timeRangeUs) * width
+              : (index / Math.max(series.samples.length - 1, 1)) * width;
+          const clampedValue = Math.max(minValue, Math.min(maxValue, value));
+          const y = height - ((clampedValue - minValue) / range) * height;
+          return `${x},${y}`;
+        })
+        .join(" "),
+    };
+  });
+}
+
+function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
+  const width = 176;
+  const height = 38;
+  const startUs = samples[0]?.timeUs ?? currentTimeUs ?? 0;
+  const endUs = samples[samples.length - 1]?.timeUs ?? startUs;
+  const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
+  const lines = multiPolylinePoints(
+    [
+      {
+        key: "roll",
+        className: "trend-metric__line trend-metric__line--roll",
+        samples,
+        valueSelector: (sample) =>
+          sample.error.roll === null ? null : Math.abs(sample.error.roll),
+      },
+      {
+        key: "pitch",
+        className: "trend-metric__line trend-metric__line--pitch",
+        samples,
+        valueSelector: (sample) =>
+          sample.error.pitch === null ? null : Math.abs(sample.error.pitch),
+      },
+      {
+        key: "yaw",
+        className: "trend-metric__line trend-metric__line--yaw",
+        samples,
+        valueSelector: (sample) =>
+          sample.error.yaw === null ? null : Math.abs(sample.error.yaw),
+      },
+    ],
+    width,
+    height,
+    0,
+    180
+  );
+  const thresholdLineY = thresholdY(90, 0, 180, height);
+
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="stick-history">
-      <rect x="0" y="0" width={width} height={height} className="stick-history__bg" />
-      <line
-        x1={width / 2}
-        x2={width / 2}
-        y1="0"
-        y2={height}
-        className="stick-history__cursor"
-      />
-      {channels.map((channel) => (
-        <polyline
-          key={channel.key}
-          points={fixedScalePolylinePoints(
-            channel.samples,
-            channel.valueSelector,
-            width,
-            height,
-            channel.minValue,
-            channel.maxValue
-          )}
-          className={channel.className}
+    <div className="trend-metric trend-metric--wide">
+      <div className="trend-metric__header">
+        <span>Error</span>
+        <div className="trend-metric__values">
+          <strong className="trend-metric__value trend-metric__value--roll">
+            R {formatMaybeValue(snapshot.error.roll === null ? null : Math.abs(snapshot.error.roll), 1)}
+          </strong>
+          <strong className="trend-metric__value trend-metric__value--pitch">
+            P {formatMaybeValue(
+              snapshot.error.pitch === null ? null : Math.abs(snapshot.error.pitch),
+              1
+            )}
+          </strong>
+          <strong className="trend-metric__value trend-metric__value--yaw">
+            Y {formatMaybeValue(snapshot.error.yaw === null ? null : Math.abs(snapshot.error.yaw), 1)}
+          </strong>
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="trend-metric__chart">
+        <rect x="0" y="0" width={width} height={height} className="trend-metric__bg" />
+        {thresholdLineY !== null ? (
+          <line
+            x1="0"
+            x2={width}
+            y1={thresholdLineY}
+            y2={thresholdLineY}
+            className="trend-metric__threshold"
+          />
+        ) : null}
+        <line
+          x1={cursorX}
+          x2={cursorX}
+          y1="0"
+          y2={height}
+          className="trend-metric__cursor"
         />
-      ))}
-    </svg>
+        {lines.some((line) => line.points) ? (
+          lines.map((line) => (
+            <polyline key={line.key} points={line.points} className={line.className} />
+          ))
+        ) : (
+          <text x={width / 2} y={height / 2 + 4} textAnchor="middle" className="trend-metric__empty">
+            no data
+          </text>
+        )}
+      </svg>
+    </div>
+  );
+}
+
+function statusClassName(label) {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
+  const width = 176;
+  const height = 34;
+  const derived = samples.map((sample) => ({
+    timeUs: sample.timeUs,
+    label: getFlightStatusSummary(sample).label,
+  }));
+  const startUs = derived[0]?.timeUs ?? 0;
+  const endUs = derived[derived.length - 1]?.timeUs ?? startUs;
+  const rangeUs = Math.max(endUs - startUs, 1);
+  const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
+  const segments = [];
+
+  for (const sample of derived) {
+    const last = segments[segments.length - 1];
+    if (last && last.label === sample.label) {
+      last.endUs = sample.timeUs;
+      continue;
+    }
+    segments.push({
+      label: sample.label,
+      startUs: sample.timeUs,
+      endUs: sample.timeUs,
+    });
+  }
+
+  return (
+    <div className="status-timeline">
+      <div className="status-timeline__header">
+        <span>Status</span>
+        <strong>{snapshot ? getFlightStatusSummary(snapshot).label : "n/a"}</strong>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="status-timeline__chart">
+        <rect x="0" y="0" width={width} height={height} className="status-timeline__bg" />
+        {segments.map((segment, index) => {
+          const x = ((segment.startUs - startUs) / rangeUs) * width;
+          const endX = ((segment.endUs - startUs) / rangeUs) * width;
+          return (
+            <rect
+              key={`${segment.label}-${index}`}
+              x={x}
+              y="6"
+              width={Math.max(endX - x, 6)}
+              height={height - 12}
+              rx="6"
+              className={`status-timeline__segment status-timeline__segment--${statusClassName(
+                segment.label
+              )}`}
+            />
+          );
+        })}
+        <line x1={cursorX} x2={cursorX} y1="0" y2={height} className="status-timeline__cursor" />
+      </svg>
+    </div>
+  );
+}
+
+function MotorDetailCard({ motors, spread, saturation }) {
+  const peak = motors.length ? Math.max(...motors) : null;
+
+  return (
+    <div className="motor-detail">
+      <div className="motor-detail__header">
+        <span>Motors</span>
+        <div className="motor-detail__summary">
+          <strong>{peak === null ? "n/a" : percent(peak)}</strong>
+          <em>Spread {percent(spread)}</em>
+          <em>Headroom {peak === null ? "n/a" : saturation ? "Low" : "OK"}</em>
+        </div>
+      </div>
+      <div className="motor-detail__grid">
+        {Array.from({ length: 4 }, (_, index) => {
+          const value = motors[index] ?? null;
+          const fill = value === null ? 0 : Math.max(0, Math.min(100, value));
+          const state =
+            value === null ? "missing" : value >= 95 ? "warn" : peak !== null && value === peak ? "peak" : "ok";
+
+          return (
+            <div key={`motor-${index}`} className={`motor-detail__cell motor-detail__cell--${state}`}>
+              <span className="motor-detail__label">M{index + 1}</span>
+              <div className="motor-detail__bar">
+                <div className="motor-detail__fill" style={{ height: `${fill}%` }} />
+              </div>
+              <strong className="motor-detail__value">
+                {value === null ? "n/a" : `${Math.round(value)}%`}
+              </strong>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function StickHistoryMini({
+  channels,
+  currentTimeUs,
+  width = 250,
+  height = 54,
+}) {
+  const startUs = channels[0]?.samples[0]?.timeUs ?? currentTimeUs ?? 0;
+  const endUs =
+    channels[0]?.samples[channels[0].samples.length - 1]?.timeUs ?? startUs;
+  const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
+
+  return (
+    <div className="stick-history-wrap">
+      <svg viewBox={`0 0 ${width} ${height}`} className="stick-history">
+        <rect x="0" y="0" width={width} height={height} className="stick-history__bg" />
+        <line
+          x1={cursorX}
+          x2={cursorX}
+          y1="0"
+          y2={height}
+          className="stick-history__cursor"
+        />
+        {channels.map((channel) => (
+          <polyline
+            key={channel.key}
+            points={fixedScalePolylinePoints(
+              channel.samples,
+              channel.valueSelector,
+              width,
+              height,
+              channel.minValue,
+              channel.maxValue
+            )}
+            className={channel.className}
+          />
+        ))}
+      </svg>
+      <div className="stick-history__legend">
+        {channels.map((channel) => (
+          <span key={channel.key} className="stick-history__legend-item">
+            <i className={`stick-history__legend-swatch ${channel.legendClassName}`} />
+            {channel.legendLabel}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -502,6 +764,7 @@ export function App() {
   const videoRef = useRef(null);
   const playbackFrameRef = useRef(0);
   const playbackClockRef = useRef(0);
+  const autoSyncAbortRef = useRef(null);
   const [busy, setBusy] = useState(false);
   const [loadErrors, setLoadErrors] = useState([]);
   const [syncNoticeVisible, setSyncNoticeVisible] = useState(false);
@@ -580,20 +843,36 @@ export function App() {
     () => (preparedFlight ? getFirstArmedTimeUs(preparedFlight) : null),
     [preparedFlight]
   );
+  const metricsWindow = useMemo(() => {
+    if (!preparedFlight) {
+      return null;
+    }
+    return getFlightWindow(
+      preparedFlight,
+      currentTimeUs - 1000000,
+      currentTimeUs + 1000000,
+      120
+    );
+  }, [preparedFlight, currentTimeUs]);
 
   async function runAutoSyncArmed(session = preparedFlight) {
     if (!session?.video || firstArmedTimeUs === null) {
       return;
     }
 
+    autoSyncAbortRef.current?.abort();
+    const abortController = new AbortController();
+    autoSyncAbortRef.current = abortController;
+
     setVideoSyncMeta(session.id, {
       detectionStatus: "running",
-      detectionMessage: "Scanning DVR for ARMED...",
+      detectionMessage: "Scanning DVR for ARMED... Press Esc to cancel.",
     });
 
     try {
       const detected = await detectArmedOverlayTime(session.video.url, {
         maxScanSeconds: 10,
+        signal: abortController.signal,
       });
 
       if (!detected) {
@@ -621,11 +900,22 @@ export function App() {
         )}s (OCR ${detected.confidence.toFixed(0)}%)`,
       });
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        setVideoSyncMeta(session.id, {
+          detectionStatus: "cancelled",
+          detectionMessage: "Auto sync cancelled.",
+        });
+        return;
+      }
       setVideoSyncMeta(session.id, {
         detectionStatus: "failed",
         detectionMessage:
           error instanceof Error ? error.message : "Auto sync failed.",
       });
+    } finally {
+      if (autoSyncAbortRef.current === abortController) {
+        autoSyncAbortRef.current = null;
+      }
     }
   }
 
@@ -712,6 +1002,15 @@ export function App() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
+      if (event.code === "Escape" && preparedFlight?.id) {
+        const syncState = videoSync[preparedFlight.id];
+        if (syncState?.detectionStatus === "running") {
+          event.preventDefault();
+          autoSyncAbortRef.current?.abort();
+        }
+        return;
+      }
+
       if (event.code !== "Space") {
         return;
       }
@@ -734,7 +1033,7 @@ export function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [playback.isPlaying, setPlayback]);
+  }, [playback.isPlaying, preparedFlight, setPlayback, videoSync]);
 
   async function handleLogFiles(fileList) {
     setBusy(true);
@@ -798,7 +1097,7 @@ export function App() {
       return undefined;
     }
 
-    if (status === "done" || status === "failed") {
+    if (status === "done" || status === "failed" || status === "cancelled") {
       setSyncNoticeVisible(true);
       const timeoutId = window.setTimeout(() => setSyncNoticeVisible(false), 3200);
       return () => window.clearTimeout(timeoutId);
@@ -807,6 +1106,13 @@ export function App() {
     setSyncNoticeVisible(false);
     return undefined;
   }, [preparedFlight?.id, videoSync]);
+
+  useEffect(() => {
+    return () => {
+      autoSyncAbortRef.current?.abort();
+      autoSyncAbortRef.current = null;
+    };
+  }, []);
 
   if (!preparedFlight) {
     return (
@@ -843,11 +1149,10 @@ export function App() {
 
   const sync = videoSync[preparedFlight.id] ?? { offsetSeconds: 0 };
   const motorStats = snapshot ? getMotorStats(snapshot.motors) : null;
-  const rpmStats = snapshot ? getRpmStats(snapshot.rpm) : null;
   const showSyncNotice =
     syncNoticeVisible &&
     preparedFlight.video &&
-    ["running", "done", "failed"].includes(sync.detectionStatus ?? "");
+    ["running", "done", "failed", "cancelled"].includes(sync.detectionStatus ?? "");
 
   return (
     <div className="shell">
@@ -965,6 +1270,8 @@ export function App() {
                   className={`sync-notice sync-notice--${
                     sync.detectionStatus === "done"
                       ? "success"
+                      : sync.detectionStatus === "cancelled"
+                        ? "neutral"
                       : sync.detectionStatus === "failed"
                         ? "error"
                         : "running"
@@ -976,11 +1283,13 @@ export function App() {
                       ? "Scanning DVR..."
                       : sync.detectionStatus === "done"
                         ? "Sync OK"
+                        : sync.detectionStatus === "cancelled"
+                          ? "Sync cancelled"
                         : "Sync failed"}
                   </strong>
                   <p className="sync-notice__message">
                     {sync.detectionStatus === "running"
-                      ? "Looking for ARMED in the DVR."
+                      ? "Looking for ARMED in the DVR. Press Esc to cancel."
                       : sync.detectionMessage ?? "Auto sync finished."}
                   </p>
                 </div>
@@ -993,22 +1302,26 @@ export function App() {
                     label="ARM"
                     value={snapshot.mode.armed ? "Armed" : "Disarmed"}
                     accent={snapshot.mode.armed ? "good" : "warning"}
+                    compact
                   />
                   <StatusPill
                     label="Mode"
                     value={snapshot.mode.names.slice(0, 3).join(", ") || "Acro"}
+                    compact
                   />
-                  <StatusPill label="Throttle band" value={overlaySummary.throttleBand} />
-                  <StatusPill label="Offset" value={`${(sync.offsetSeconds ?? 0).toFixed(2)}s`} />
+                  <StatusPill label="Throttle" value={overlaySummary.throttleBand} compact />
+                  <StatusPill label="Offset" value={`${(sync.offsetSeconds ?? 0).toFixed(2)}s`} compact />
                 </div>
                 <div className="overlay overlay--summary">
-                  <TinyMetric label="Status" value={overlaySummary.label} />
-                  <TinyMetric label="Roll err" value={formatMaybeValue(snapshot.error.roll, 1)} />
-                  <TinyMetric label="Pitch err" value={formatMaybeValue(snapshot.error.pitch, 1)} />
-                  <TinyMetric label="Yaw err" value={formatMaybeValue(snapshot.error.yaw, 1)} />
-                  <TinyMetric
-                    label="Headroom"
-                    value={motorStats?.max === null ? "n/a" : overlaySummary.saturation ? "Limited" : "OK"}
+                  <StatusTimelineCard
+                    snapshot={snapshot}
+                    samples={metricsWindow?.samples ?? []}
+                    currentTimeUs={currentTimeUs}
+                  />
+                  <ErrorTrendCard
+                    snapshot={snapshot}
+                    samples={metricsWindow?.samples ?? []}
+                    currentTimeUs={currentTimeUs}
                   />
                 </div>
                 <div className="overlay overlay--sticks overlay--sticks-left">
@@ -1034,6 +1347,7 @@ export function App() {
                     miniGraph={
                       overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
                         <StickHistoryMini
+                          currentTimeUs={currentTimeUs}
                           channels={[
                             {
                               key: "throttle",
@@ -1043,6 +1357,9 @@ export function App() {
                               maxValue: 100,
                               className:
                                 "stick-history__line stick-history__line--throttle",
+                              legendClassName:
+                                "stick-history__legend-swatch--throttle",
+                              legendLabel: "Thr",
                             },
                             {
                               key: "yaw",
@@ -1051,6 +1368,8 @@ export function App() {
                               minValue: -500,
                               maxValue: 500,
                               className: "stick-history__line stick-history__line--yaw",
+                              legendClassName: "stick-history__legend-swatch--yaw",
+                              legendLabel: "Yaw",
                             },
                           ]}
                         />
@@ -1081,6 +1400,7 @@ export function App() {
                     miniGraph={
                       overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
                         <StickHistoryMini
+                          currentTimeUs={currentTimeUs}
                           channels={[
                             {
                               key: "roll",
@@ -1090,6 +1410,8 @@ export function App() {
                               maxValue: 500,
                               className:
                                 "stick-history__line stick-history__line--roll",
+                              legendClassName: "stick-history__legend-swatch--roll",
+                              legendLabel: "Roll",
                             },
                             {
                               key: "pitch",
@@ -1099,6 +1421,8 @@ export function App() {
                               maxValue: 500,
                               className:
                                 "stick-history__line stick-history__line--pitch",
+                              legendClassName: "stick-history__legend-swatch--pitch",
+                              legendLabel: "Pitch",
                             },
                           ]}
                         />
@@ -1107,15 +1431,10 @@ export function App() {
                   />
                 </div>
                 <div className="overlay overlay--bottom">
-                  <StatusPill
-                    label="Motor max"
-                    value={percent(motorStats?.max)}
-                    accent={overlaySummary.saturation ? "warning" : "neutral"}
-                  />
-                  <StatusPill label="Motor spread" value={percent(motorStats?.spread)} />
-                  <StatusPill
-                    label="RPM avg"
-                    value={rpmStats?.avg === null ? "n/a" : `${Math.round(rpmStats.avg)}`}
+                  <MotorDetailCard
+                    motors={snapshot.motors}
+                    spread={motorStats?.spread}
+                    saturation={overlaySummary.saturation}
                   />
                   {snapshot.aux.slice(0, 3).map((aux) => (
                     <StatusPill
@@ -1157,9 +1476,11 @@ export function App() {
                 Auto sync
                 <div className="timeline__sync-status">
                   {sync.detectionStatus === "running"
-                    ? "Scanning in viewer..."
+                    ? "Scanning in viewer... Press Esc to cancel."
                     : sync.detectionStatus === "done"
                       ? `OK: ${sync.detectionMessage ?? "Auto sync finished."}`
+                      : sync.detectionStatus === "cancelled"
+                        ? `Cancelled: ${sync.detectionMessage ?? "Auto sync cancelled."}`
                       : sync.detectionStatus === "failed"
                         ? `NG: ${sync.detectionMessage ?? "Auto sync failed."}`
                         : sync.detectionMessage ?? "Not run"}

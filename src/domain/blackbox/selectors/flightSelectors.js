@@ -260,12 +260,56 @@ function flattenChunks(chunks) {
   return chunks.flatMap((chunk) => chunk.frames);
 }
 
-function downsampleFrames(frames, limit) {
+function downsampleFrames(frames, limit, timeFieldIndex = TIME_FIELD_INDEX) {
   if (frames.length <= limit) {
     return frames;
   }
-  const step = Math.ceil(frames.length / limit);
-  return frames.filter((_, index) => index % step === 0 || index === frames.length - 1);
+
+  const startTimeUs = frames[0]?.[timeFieldIndex];
+  const endTimeUs = frames[frames.length - 1]?.[timeFieldIndex];
+  if (
+    startTimeUs === undefined ||
+    endTimeUs === undefined ||
+    endTimeUs <= startTimeUs
+  ) {
+    const step = Math.ceil(frames.length / limit);
+    return frames.filter((_, index) => index % step === 0 || index === frames.length - 1);
+  }
+
+  const bucketSizeUs = Math.max((endTimeUs - startTimeUs) / Math.max(limit - 1, 1), 1);
+  const sampled = [];
+  let frameIndex = 0;
+
+  for (let bucket = 0; bucket < limit && frameIndex < frames.length; bucket += 1) {
+    const targetTimeUs =
+      bucket === limit - 1 ? endTimeUs : startTimeUs + bucket * bucketSizeUs;
+
+    while (
+      frameIndex < frames.length - 1 &&
+      frames[frameIndex][timeFieldIndex] < targetTimeUs
+    ) {
+      frameIndex += 1;
+    }
+
+    const current = frames[frameIndex];
+    const previous = frameIndex > 0 ? frames[frameIndex - 1] : null;
+    const chosen =
+      previous &&
+      Math.abs(previous[timeFieldIndex] - targetTimeUs) <
+        Math.abs(current[timeFieldIndex] - targetTimeUs)
+        ? previous
+        : current;
+
+    if (sampled[sampled.length - 1] !== chosen) {
+      sampled.push(chosen);
+    }
+  }
+
+  if (sampled[sampled.length - 1] !== frames[frames.length - 1]) {
+    sampled.push(frames[frames.length - 1]);
+  }
+
+  return sampled;
 }
 
 export function getFlightWindow(session, startUs, endUs, limit = SAMPLE_LIMIT) {

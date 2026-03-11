@@ -13,6 +13,16 @@ const NORMALIZED_WIDTH = 320;
 const NORMALIZED_HEIGHT = 120;
 const MIN_LIT_PIXELS = 40;
 
+function createAbortError() {
+  return new DOMException("Auto sync was cancelled.", "AbortError");
+}
+
+function throwIfAborted(signal) {
+  if (signal?.aborted) {
+    throw createAbortError();
+  }
+}
+
 function getCanvasContext(canvas) {
   return canvas.getContext("2d", { willReadFrequently: true });
 }
@@ -24,8 +34,12 @@ function getWorker() {
   return workerPromise;
 }
 
-function waitForEvent(target, eventName) {
+function waitForEvent(target, eventName, signal) {
   return new Promise((resolve, reject) => {
+    const onAbort = () => {
+      cleanup();
+      reject(createAbortError());
+    };
     const onSuccess = () => {
       cleanup();
       resolve();
@@ -37,23 +51,26 @@ function waitForEvent(target, eventName) {
     const cleanup = () => {
       target.removeEventListener(eventName, onSuccess);
       target.removeEventListener("error", onError);
+      signal?.removeEventListener("abort", onAbort);
     };
 
+    throwIfAborted(signal);
     target.addEventListener(eventName, onSuccess, { once: true });
     target.addEventListener("error", onError, { once: true });
+    signal?.addEventListener("abort", onAbort, { once: true });
   });
 }
 
-async function createAnalysisVideo(url) {
+async function createAnalysisVideo(url, signal) {
   const video = document.createElement("video");
   video.src = url;
   video.crossOrigin = "anonymous";
   video.muted = true;
   video.preload = "auto";
-  await waitForEvent(video, "loadedmetadata");
+  await waitForEvent(video, "loadedmetadata", signal);
   if (video.readyState < 2) {
     try {
-      await waitForEvent(video, "loadeddata");
+      await waitForEvent(video, "loadeddata", signal);
     } catch {
       // Some browsers do not eagerly buffer object URLs until seek time.
     }
@@ -61,18 +78,19 @@ async function createAnalysisVideo(url) {
   return video;
 }
 
-async function seekVideo(video, timeSeconds) {
+async function seekVideo(video, timeSeconds, signal) {
+  throwIfAborted(signal);
   const clamped = Math.max(0, Math.min(timeSeconds, Math.max(video.duration - 0.05, 0)));
   if (Math.abs(video.currentTime - clamped) < 0.01) {
     if (video.readyState < 2) {
-      await waitForEvent(video, "loadeddata");
+      await waitForEvent(video, "loadeddata", signal);
     }
     return;
   }
   video.currentTime = clamped;
-  await waitForEvent(video, "seeked");
+  await waitForEvent(video, "seeked", signal);
   if (video.readyState < 2) {
-    await waitForEvent(video, "loadeddata");
+    await waitForEvent(video, "loadeddata", signal);
   }
 }
 
@@ -348,8 +366,9 @@ export async function detectArmedOverlayTime(videoUrl, options = {}) {
   const maxScanSeconds = options.maxScanSeconds ?? 10;
   const coarseStep = options.coarseStepSeconds ?? 0.25;
   const refineStep = options.refineStepSeconds ?? 0.05;
+  const signal = options.signal;
 
-  const video = await createAnalysisVideo(videoUrl);
+  const video = await createAnalysisVideo(videoUrl, signal);
   const scanEnd = Math.min(maxScanSeconds, Math.max(video.duration, 0));
 
   let best = {
@@ -360,7 +379,8 @@ export async function detectArmedOverlayTime(videoUrl, options = {}) {
   };
 
   for (let timeSeconds = 0; timeSeconds <= scanEnd; timeSeconds += coarseStep) {
-    await seekVideo(video, timeSeconds);
+    throwIfAborted(signal);
+    await seekVideo(video, timeSeconds, signal);
     const templateResult = detectByTemplate(video);
     if (!templateResult.canvas) {
       continue;
@@ -398,7 +418,8 @@ export async function detectArmedOverlayTime(videoUrl, options = {}) {
   const refineEnd = Math.min(scanEnd, best.timeSeconds + coarseStep);
 
   for (let timeSeconds = refineStart; timeSeconds <= refineEnd; timeSeconds += refineStep) {
-    await seekVideo(video, timeSeconds);
+    throwIfAborted(signal);
+    await seekVideo(video, timeSeconds, signal);
     const templateResult = detectByTemplate(video);
     if (!templateResult.canvas) {
       continue;
