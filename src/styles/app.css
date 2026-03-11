@@ -110,6 +110,7 @@ input {
 .topbar .toolbar {
   flex: 1 1 420px;
   justify-content: flex-end;
+  gap: 8px;
 }
 
 .topbar h1,
@@ -147,6 +148,15 @@ input {
   border-radius: 999px;
   padding: 12px 18px;
   cursor: pointer;
+}
+
+.topbar > .toolbar:first-of-type .file-button,
+.topbar > .toolbar:first-of-type .transport,
+.topbar > .toolbar:first-of-type .rate-select,
+.topbar > .toolbar:first-of-type .rate-slider {
+  padding: 8px 12px;
+  font-size: 13px;
+  min-height: 38px;
 }
 
 .transport:disabled {
@@ -247,9 +257,9 @@ input {
 .rate-slider {
   display: grid;
   gap: 6px;
-  min-width: 210px;
-  padding: 10px 14px;
-  border-radius: 18px;
+  min-width: 180px;
+  padding: 8px 12px;
+  border-radius: 16px;
 }
 
 .rate-slider__label {
@@ -1388,8 +1398,8 @@ input {
 .timeline__controls input,
 .rate-select {
   color: var(--text);
-  padding: 10px 12px;
-  border-radius: 14px;
+  padding: 8px 11px;
+  border-radius: 12px;
 }
 
 select,
