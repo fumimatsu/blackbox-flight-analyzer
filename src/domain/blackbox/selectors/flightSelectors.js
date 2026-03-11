@@ -16,11 +16,15 @@ function resolveFieldIndex(session, candidates) {
   return undefined;
 }
 
-function getValue(frame, index, fallback = 0) {
+function getValue(frame, index, fallback = null) {
   if (!frame || index === undefined || frame[index] === undefined || frame[index] === null) {
     return fallback;
   }
   return frame[index];
+}
+
+function isPresent(value) {
+  return value !== null && value !== undefined && !Number.isNaN(value);
 }
 
 function getModeNames(log, frame, session) {
@@ -48,16 +52,19 @@ function getAuxChannels(session, frame) {
     .filter((entry) => entry.channel >= 4)
     .slice(0, 6)
     .map((entry) => {
-      const value = getValue(frame, entry.index, 0);
+      const value = getValue(frame, entry.index);
       return {
         label: `AUX${entry.channel - 3}`,
         value,
-        active: value > 1500,
+        active: isPresent(value) ? value > 1500 : null,
       };
     });
 }
 
 function normalizeThrottle(log, raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
   try {
     return log.rcCommandRawToThrottle(raw);
   } catch {
@@ -66,15 +73,24 @@ function normalizeThrottle(log, raw) {
 }
 
 function normalizeRawAxis(session, raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
   const midrc = session.log.getSysConfig().midrc ?? 1500;
   return raw - midrc;
 }
 
 function normalizeRawThrottle(raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
   return Math.max(0, Math.min(100, (raw - 1000) / 10));
 }
 
 function normalizeGyro(log, raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
   try {
     return log.gyroRawToDegreesPerSecond(raw);
   } catch {
@@ -83,6 +99,9 @@ function normalizeGyro(log, raw) {
 }
 
 function normalizeMotor(log, raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
   try {
     return log.rcMotorRawToPctPhysical(raw);
   } catch {
@@ -93,7 +112,7 @@ function normalizeMotor(log, raw) {
 function getMotorValues(session, frame) {
   return Array.from({ length: session.numMotors || 4 }, (_, index) => {
     const fieldIndex = session.fieldIndex[`motor[${index}]`];
-    return normalizeMotor(session.log, getValue(frame, fieldIndex, 0));
+    return normalizeMotor(session.log, getValue(frame, fieldIndex));
   }).filter((value) => Number.isFinite(value));
 }
 
@@ -101,37 +120,59 @@ function getRpmValues(session, frame) {
   return session.fieldNames
     .filter((name) => /^(eRPM|rpm)\[\d+\]$/.test(name))
     .slice(0, Math.max(session.numMotors, 4))
-    .map((name) => getValue(frame, session.fieldIndex[name], 0));
+    .map((name) => getValue(frame, session.fieldIndex[name]))
+    .filter((value) => Number.isFinite(value));
+}
+
+function getAxisValue(session, frame, axis, kind, derived = {}) {
+  const axisIndex = AXIS_INDEX[axis];
+
+  if (kind === "rc") {
+    return getValue(
+      frame,
+      resolveFieldIndex(session, [`rcCommands[${axisIndex}]`, `rcCommand[${axisIndex}]`])
+    );
+  }
+
+  if (kind === "setpoint") {
+    return getValue(frame, resolveFieldIndex(session, [`setpoint[${axisIndex}]`]));
+  }
+
+  if (kind === "gyro") {
+    return normalizeGyro(
+      session.log,
+      getValue(frame, resolveFieldIndex(session, [`gyroADC[${axisIndex}]`]))
+    );
+  }
+
+  if (kind === "error") {
+    const errorIndex = resolveFieldIndex(session, [`axisError[${axisIndex}]`]);
+    if (errorIndex !== undefined) {
+      return getValue(frame, errorIndex);
+    }
+
+    const setpoint = derived.setpoint?.[axis];
+    const gyro = derived.gyro?.[axis];
+    if (!isPresent(setpoint) || !isPresent(gyro)) {
+      return null;
+    }
+    return setpoint - gyro;
+  }
+
+  return null;
 }
 
 function mapAxisValues(session, frame, kind) {
+  const derived =
+    kind === "error"
+      ? {
+          setpoint: mapAxisValues(session, frame, "setpoint"),
+          gyro: mapAxisValues(session, frame, "gyro"),
+        }
+      : null;
+
   return AXES.reduce((result, axis) => {
-    const axisIndex = AXIS_INDEX[axis];
-    let value = 0;
-
-    if (kind === "rc") {
-      value = getValue(
-        frame,
-        resolveFieldIndex(session, [`rcCommands[${axisIndex}]`, `rcCommand[${axisIndex}]`]),
-        0
-      );
-    } else if (kind === "setpoint") {
-      value = getValue(frame, resolveFieldIndex(session, [`setpoint[${axisIndex}]`]), 0);
-    } else if (kind === "gyro") {
-      value = normalizeGyro(
-        session.log,
-        getValue(frame, resolveFieldIndex(session, [`gyroADC[${axisIndex}]`]), 0)
-      );
-    } else if (kind === "error") {
-      const errorIndex = resolveFieldIndex(session, [`axisError[${axisIndex}]`]);
-      value =
-        errorIndex !== undefined
-          ? getValue(frame, errorIndex, 0)
-          : mapAxisValues(session, frame, "setpoint")[axis] -
-            mapAxisValues(session, frame, "gyro")[axis];
-    }
-
-    result[axis] = value;
+    result[axis] = getAxisValue(session, frame, axis, kind, derived);
     return result;
   }, {});
 }
@@ -139,11 +180,11 @@ function mapAxisValues(session, frame, kind) {
 function getThrottleValue(session, frame) {
   const normalizedIndex = resolveFieldIndex(session, [`rcCommands[${THROTTLE_INDEX}]`]);
   if (normalizedIndex !== undefined) {
-    return getValue(frame, normalizedIndex, 0);
+    return getValue(frame, normalizedIndex);
   }
 
   const rawIndex = resolveFieldIndex(session, [`rcCommand[${THROTTLE_INDEX}]`]);
-  return normalizeThrottle(session.log, getValue(frame, rawIndex, 0));
+  return normalizeThrottle(session.log, getValue(frame, rawIndex));
 }
 
 function getRawRcValue(session, frame, axis) {
@@ -153,7 +194,7 @@ function getRawRcValue(session, frame, axis) {
     return null;
   }
 
-  const raw = getValue(frame, rawIndex, 0);
+  const raw = getValue(frame, rawIndex);
 
   if (axis === "throttle") {
     return normalizeRawThrottle(raw);

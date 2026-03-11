@@ -6,4 +6,8 @@ export default {
   build: {
     sourcemap: true,
   },
+  test: {
+    environment: "jsdom",
+    setupFiles: "./src/test/setupTests.js",
+  },
 };

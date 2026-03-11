@@ -81,3 +81,9 @@
 - Video is the primary surface.
 - The UI should explain flight behavior in context, not foreground raw waveforms.
 - The long-term differentiator is event-based comparison on top of DVR review.
+
+## Verification rule
+- UI の状態分岐、hook、表示条件、ファイル読み込み導線を触った変更は、ユーザーに渡す前に最低でも `npm run build` を通す。
+- テスト対象を触った変更は `npm test` まで通す。
+- 実データが repo 内にある場合、最低 1 セットは実際に投入して smoke check を行う。
+- 未確認のものを確認済みとして渡さない。未確認ならそう明記する。

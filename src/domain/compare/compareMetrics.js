@@ -7,11 +7,16 @@ function mean(values) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+function definedNumbers(values) {
+  return values.filter((value) => value !== null && value !== undefined && !Number.isNaN(value));
+}
+
 function rmse(values) {
-  if (!values.length) {
+  const filtered = definedNumbers(values);
+  if (!filtered.length) {
     return 0;
   }
-  return Math.sqrt(mean(values.map((value) => value * value)));
+  return Math.sqrt(mean(filtered.map((value) => value * value)));
 }
 
 function filterByEventType(events, type) {
@@ -40,20 +45,28 @@ export function getCompareSummary(flightA, flightB, eventType = null) {
   const summarize = (flight) => {
     const samples = selectSamples(flight);
     return {
-      rollRmse: rmse(samples.map((sample) => sample.error.roll ?? 0)),
-      pitchRmse: rmse(samples.map((sample) => sample.error.pitch ?? 0)),
+      rollRmse: rmse(samples.map((sample) => sample.error.roll)),
+      pitchRmse: rmse(samples.map((sample) => sample.error.pitch)),
       saturationRate:
         samples.filter((sample) => getFlightStatusSummary(sample).saturation).length /
         Math.max(samples.length, 1),
       highThrottleError: mean(
         samples
-          .filter((sample) => sample.rc.throttle >= 70)
+          .filter((sample) => sample.rc.throttle !== null && sample.rc.throttle >= 70)
           .map((sample) => getErrorMagnitude(sample.error))
+          .filter((value) => value !== null)
       ),
       loadedTurnError: mean(
         samples
-          .filter((sample) => sample.rc.throttle >= 35 && Math.abs(sample.setpoint.roll) >= 180)
+          .filter(
+            (sample) =>
+              sample.rc.throttle !== null &&
+              sample.setpoint.roll !== null &&
+              sample.rc.throttle >= 35 &&
+              Math.abs(sample.setpoint.roll) >= 180
+          )
           .map((sample) => getErrorMagnitude(sample.error))
+          .filter((value) => value !== null)
       ),
       eventCount: filterByEventType(flight.events, eventType).length,
     };

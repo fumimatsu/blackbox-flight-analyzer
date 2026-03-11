@@ -82,6 +82,9 @@ export function detectAnalysisEvents(windowSlice) {
       derived,
       EVENT_TYPES.HIGH_THROTTLE_STRAIGHT,
       (sample) =>
+        sample.rc.throttle !== null &&
+        sample.rc.roll !== null &&
+        sample.rc.pitch !== null &&
         sample.rc.throttle >= 72 &&
         Math.abs(sample.rc.roll) < 12 &&
         Math.abs(sample.rc.pitch) < 12 && {
@@ -93,6 +96,11 @@ export function detectAnalysisEvents(windowSlice) {
       derived,
       EVENT_TYPES.CHOP_TURN,
       (sample) =>
+        sample.previousThrottle !== null &&
+        sample.rc.throttle !== null &&
+        sample.rc.roll !== null &&
+        sample.rc.pitch !== null &&
+        sample.rc.yaw !== null &&
         sample.previousThrottle >= 60 &&
         sample.rc.throttle <= 30 &&
         (Math.abs(sample.rc.roll) >= 18 ||
@@ -106,6 +114,9 @@ export function detectAnalysisEvents(windowSlice) {
       derived,
       EVENT_TYPES.LOADED_ROLL_ARC,
       (sample) =>
+        sample.rc.throttle !== null &&
+        sample.setpoint.roll !== null &&
+        sample.setpoint.pitch !== null &&
         sample.rc.throttle >= 35 &&
         Math.abs(sample.setpoint.roll) >= 180 &&
         Math.abs(sample.setpoint.pitch) <= 220 && {
@@ -117,6 +128,7 @@ export function detectAnalysisEvents(windowSlice) {
       derived,
       EVENT_TYPES.HIGH_ERROR_BURST,
       (sample) =>
+        sample.errorMagnitude !== null &&
         sample.errorMagnitude >= 90 && {
           score: sample.errorMagnitude,
           summary: "High error burst",

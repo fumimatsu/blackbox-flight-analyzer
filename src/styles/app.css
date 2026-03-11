@@ -1,8 +1,8 @@
 :root {
   color-scheme: dark;
   --bg: #08141a;
-  --panel: rgba(10, 18, 24, 0.78);
-  --panel-strong: rgba(5, 10, 14, 0.92);
+  --panel: rgba(10, 18, 24, 0.62);
+  --panel-strong: rgba(5, 10, 14, 0.64);
   --line: rgba(164, 196, 205, 0.24);
   --text: #eff9fb;
   --muted: #95aeb5;
@@ -200,8 +200,8 @@ input {
 
 .viewer__scrim {
   background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.42), transparent 28%, transparent 75%, rgba(0, 0, 0, 0.54)),
-    radial-gradient(circle at center, transparent 45%, rgba(0, 0, 0, 0.32) 100%);
+    linear-gradient(180deg, rgba(0, 0, 0, 0.2), transparent 28%, transparent 75%, rgba(0, 0, 0, 0.26)),
+    radial-gradient(circle at center, transparent 52%, rgba(0, 0, 0, 0.16) 100%);
   pointer-events: none;
 }
 
@@ -215,6 +215,71 @@ input {
 .overlay {
   position: absolute;
   z-index: 2;
+}
+
+.sync-notice-wrap {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  padding: 24px;
+}
+
+.sync-notice {
+  width: min(460px, calc(100% - 48px));
+  padding: 20px 24px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(4, 10, 14, 0.74);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+  text-align: center;
+}
+
+.sync-notice--running {
+  border-color: rgba(152, 190, 255, 0.2);
+}
+
+.sync-notice--success {
+  border-color: rgba(125, 242, 197, 0.26);
+}
+
+.sync-notice--error {
+  border-color: rgba(255, 187, 112, 0.26);
+}
+
+.sync-notice__eyebrow {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.sync-notice__title {
+  display: block;
+  font-size: 28px;
+  line-height: 1.1;
+}
+
+.sync-notice--running .sync-notice__title {
+  color: var(--rpm);
+}
+
+.sync-notice--success .sync-notice__title {
+  color: var(--accent);
+}
+
+.sync-notice--error .sync-notice__title {
+  color: var(--warn);
+}
+
+.sync-notice__message {
+  margin: 10px 0 0;
+  color: var(--text);
 }
 
 .overlay--top {
@@ -258,8 +323,9 @@ input {
 .stick-card,
 .compare-metric {
   background: var(--panel-strong);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 18px;
+  backdrop-filter: blur(10px);
 }
 
 .status-pill,
@@ -306,13 +372,13 @@ input {
   width: 100%;
   aspect-ratio: 1;
   border-radius: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .stick-card__crosshair {
   position: absolute;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .stick-card__crosshair--x {
@@ -352,7 +418,7 @@ input {
   left: 50%;
   top: 50%;
   background: var(--accent);
-  box-shadow: 0 0 8px rgba(125, 242, 197, 0.28);
+  box-shadow: 0 0 8px rgba(125, 242, 197, 0.18);
   border-radius: 999px;
   transform: translate(-50%, -50%);
 }
@@ -382,7 +448,7 @@ input {
   height: 18px;
   background: transparent;
   border: 3px solid var(--rpm);
-  box-shadow: 0 0 8px rgba(152, 190, 255, 0.28);
+  box-shadow: 0 0 8px rgba(152, 190, 255, 0.16);
   border-radius: 999px;
   z-index: 1;
 }
@@ -394,7 +460,7 @@ input {
 .stick-card__trail {
   width: 10px;
   height: 10px;
-  background: rgba(255, 255, 255, 0.78);
+  background: rgba(255, 255, 255, 0.5);
   box-shadow: none;
   border-radius: 999px;
 }

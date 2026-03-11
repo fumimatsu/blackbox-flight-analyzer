@@ -1,4 +1,7 @@
 export function getThrottleBand(throttle) {
+  if (throttle === null || throttle === undefined || Number.isNaN(throttle)) {
+    return "unknown";
+  }
   if (throttle >= 80) return "high";
   if (throttle >= 55) return "mid-high";
   if (throttle >= 30) return "mid";
@@ -8,7 +11,7 @@ export function getThrottleBand(throttle) {
 
 export function getMotorStats(motors) {
   if (!motors.length) {
-    return { min: 0, max: 0, spread: 0, avg: 0 };
+    return { min: null, max: null, spread: null, avg: null };
   }
   const min = Math.min(...motors);
   const max = Math.max(...motors);
@@ -18,7 +21,7 @@ export function getMotorStats(motors) {
 
 export function getRpmStats(rpm) {
   if (!rpm.length) {
-    return { max: 0, avg: 0 };
+    return { max: null, avg: null };
   }
   return {
     max: Math.max(...rpm),
@@ -28,25 +31,34 @@ export function getRpmStats(rpm) {
 
 export function getSaturationFlag(snapshot) {
   const motorStats = getMotorStats(snapshot.motors);
+  if (motorStats.max === null || motorStats.spread === null) {
+    return false;
+  }
   return motorStats.max >= 95 || motorStats.spread >= 35;
 }
 
 export function getErrorMagnitude(error) {
-  return Math.max(
-    Math.abs(error.roll ?? 0),
-    Math.abs(error.pitch ?? 0),
-    Math.abs(error.yaw ?? 0)
+  const values = [error.roll, error.pitch, error.yaw].filter(
+    (value) => value !== null && value !== undefined && !Number.isNaN(value)
   );
+  if (!values.length) {
+    return null;
+  }
+  return Math.max(...values.map((value) => Math.abs(value)));
 }
 
 export function getFlightStatusSummary(snapshot) {
+  const motor = getMotorStats(snapshot.motors);
+  const rpm = getRpmStats(snapshot.rpm);
   const throttleBand = getThrottleBand(snapshot.rc.throttle);
   const saturation = getSaturationFlag(snapshot);
   const errorMagnitude = getErrorMagnitude(snapshot.error);
 
   let label = "Settled";
-  if (saturation) label = "Headroom limited";
-  else if (errorMagnitude >= 120) label = "Tracking off";
+  if (throttleBand === "unknown" && errorMagnitude === null && motor.max === null) {
+    label = "Data incomplete";
+  } else if (saturation) label = "Headroom limited";
+  else if (errorMagnitude !== null && errorMagnitude >= 120) label = "Tracking off";
   else if (throttleBand === "high") label = "High-speed run";
   else if (throttleBand === "idle") label = "Throttle off";
 
@@ -55,7 +67,7 @@ export function getFlightStatusSummary(snapshot) {
     throttleBand,
     saturation,
     errorMagnitude,
-    motor: getMotorStats(snapshot.motors),
-    rpm: getRpmStats(snapshot.rpm),
+    motor,
+    rpm,
   };
 }

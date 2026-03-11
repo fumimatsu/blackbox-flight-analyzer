@@ -35,10 +35,16 @@ function formatMicroseconds(timeUs) {
 }
 
 function percent(value, digits = 0) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "n/a";
+  }
   return `${value.toFixed(digits)}%`;
 }
 
 function signed(value, digits = 1) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return "n/a";
+  }
   return `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
 }
 
@@ -65,6 +71,20 @@ function formatMaybeValue(value, digits = 0, suffix = "") {
     return "n/a";
   }
   return `${value.toFixed(digits)}${suffix}`;
+}
+
+function negateMaybe(value) {
+  if (value === null || value === undefined || Number.isNaN(value)) {
+    return null;
+  }
+  return -value;
+}
+
+function mapMaybePoint(xValue, yValue) {
+  if (xValue === null || yValue === null) {
+    return null;
+  }
+  return { x: xValue, y: yValue };
 }
 
 function useSelectedFlight() {
@@ -98,6 +118,7 @@ function StickOverlay({
 }) {
   const rawActive = Boolean(rawPoint);
   const setpointActive = Boolean(setpointPoint);
+  const commandActive = xValue !== null && yValue !== null;
 
   return (
     <div className="stick-card">
@@ -136,7 +157,11 @@ function StickOverlay({
         />
         <div
           className="stick-card__cross-dot"
-          style={{ left: `${xValue}%`, top: `${yValue}%` }}
+          style={{
+            left: `${commandActive ? xValue : 50}%`,
+            top: `${commandActive ? yValue : 50}%`,
+            opacity: commandActive ? 1 : 0.25,
+          }}
         >
           <div className="stick-card__cross-dot-x" />
           <div className="stick-card__cross-dot-y" />
@@ -192,17 +217,21 @@ function TinyMetric({ label, value }) {
 }
 
 function polylinePoints(samples, valueSelector, width, height) {
-  if (!samples.length) {
+  const indexed = samples
+    .map((sample, index) => ({ index, value: valueSelector(sample) }))
+    .filter(({ value }) => value !== null && value !== undefined && !Number.isNaN(value));
+
+  if (!indexed.length) {
     return "";
   }
-  const values = samples.map(valueSelector);
+  const values = indexed.map(({ value }) => value);
   const min = Math.min(...values);
   const max = Math.max(...values);
   const range = max - min || 1;
-  return samples
-    .map((sample, index) => {
+  return indexed
+    .map(({ index, value }) => {
       const x = (index / Math.max(samples.length - 1, 1)) * width;
-      const y = height - ((valueSelector(sample) - min) / range) * height;
+      const y = height - ((value - min) / range) * height;
       return `${x},${y}`;
     })
     .join(" ");
@@ -216,16 +245,20 @@ function fixedScalePolylinePoints(
   minValue,
   maxValue
 ) {
-  if (!samples.length) {
+  const indexed = samples
+    .map((sample, index) => ({ index, value: valueSelector(sample) }))
+    .filter(({ value }) => value !== null && value !== undefined && !Number.isNaN(value));
+
+  if (!indexed.length) {
     return "";
   }
 
   const range = maxValue - minValue || 1;
-  return samples
-    .map((sample, index) => {
+  return indexed
+    .map(({ index, value }) => {
       const x = (index / Math.max(samples.length - 1, 1)) * width;
-      const value = Math.max(minValue, Math.min(maxValue, valueSelector(sample)));
-      const y = height - ((value - minValue) / range) * height;
+      const clampedValue = Math.max(minValue, Math.min(maxValue, value));
+      const y = height - ((clampedValue - minValue) / range) * height;
       return `${x},${y}`;
     })
     .join(" ");
@@ -470,7 +503,8 @@ export function App() {
   const playbackFrameRef = useRef(0);
   const playbackClockRef = useRef(0);
   const [busy, setBusy] = useState(false);
-  const [loadError, setLoadError] = useState("");
+  const [loadErrors, setLoadErrors] = useState([]);
+  const [syncNoticeVisible, setSyncNoticeVisible] = useState(false);
   const flights = useAppStore((state) => state.flights);
   const selectedFlight = useSelectedFlight();
   const preparedFlight = useMemo(() => prepareFlight(selectedFlight), [selectedFlight]);
@@ -516,18 +550,16 @@ export function App() {
       .slice(-32);
 
     return {
-      left: trailSamples.map((sample) =>
-        ({
-          x: mapStickAxis(sample.rc.yaw),
-          y: mapThrottleAxis(sample.rc.throttle),
-        })
-      ),
-      right: trailSamples.map((sample) =>
-        ({
-          x: mapStickAxis(sample.rc.roll),
-          y: mapStickAxis(-sample.rc.pitch),
-        })
-      ),
+      left: trailSamples
+        .map((sample) =>
+          mapMaybePoint(mapStickAxis(sample.rc.yaw), mapThrottleAxis(sample.rc.throttle))
+        )
+        .filter(Boolean),
+      right: trailSamples
+        .map((sample) =>
+          mapMaybePoint(mapStickAxis(sample.rc.roll), mapStickAxis(negateMaybe(sample.rc.pitch)))
+        )
+        .filter(Boolean),
     };
   }, [preparedFlight, snapshot, currentTimeUs]);
 
@@ -706,16 +738,17 @@ export function App() {
 
   async function handleLogFiles(fileList) {
     setBusy(true);
-    setLoadError("");
+    setLoadErrors([]);
     try {
       for (const file of Array.from(fileList)) {
         try {
           const flight = await loadFlightSessionFromFile(file);
           addFlight(flight);
         } catch (error) {
-          setLoadError(
-            `${file.name}: ${error instanceof Error ? error.message : String(error)}`
-          );
+          setLoadErrors((current) => [
+            ...current,
+            `${file.name}: ${error instanceof Error ? error.message : String(error)}`,
+          ]);
         }
       }
     } finally {
@@ -751,6 +784,30 @@ export function App() {
     void runAutoSyncArmed(preparedFlight);
   }, [preparedFlight, firstArmedTimeUs]);
 
+  useEffect(() => {
+    if (!preparedFlight?.id) {
+      setSyncNoticeVisible(false);
+      return undefined;
+    }
+
+    const state = videoSync[preparedFlight.id];
+    const status = state?.detectionStatus;
+
+    if (status === "running") {
+      setSyncNoticeVisible(true);
+      return undefined;
+    }
+
+    if (status === "done" || status === "failed") {
+      setSyncNoticeVisible(true);
+      const timeoutId = window.setTimeout(() => setSyncNoticeVisible(false), 3200);
+      return () => window.clearTimeout(timeoutId);
+    }
+
+    setSyncNoticeVisible(false);
+    return undefined;
+  }, [preparedFlight?.id, videoSync]);
+
   if (!preparedFlight) {
     return (
       <div className="empty-state">
@@ -774,7 +831,11 @@ export function App() {
             </label>
           </div>
           {busy ? <p className="muted">Loading logs...</p> : null}
-          {loadError ? <p className="muted">{loadError}</p> : null}
+          {loadErrors.map((error) => (
+            <p key={error} className="muted">
+              {error}
+            </p>
+          ))}
         </div>
       </div>
     );
@@ -783,6 +844,10 @@ export function App() {
   const sync = videoSync[preparedFlight.id] ?? { offsetSeconds: 0 };
   const motorStats = snapshot ? getMotorStats(snapshot.motors) : null;
   const rpmStats = snapshot ? getRpmStats(snapshot.rpm) : null;
+  const showSyncNotice =
+    syncNoticeVisible &&
+    preparedFlight.video &&
+    ["running", "done", "failed"].includes(sync.detectionStatus ?? "");
 
   return (
     <div className="shell">
@@ -854,7 +919,11 @@ export function App() {
             <option value="2000000">+-2.0s</option>
           </select>
         </div>
-        {loadError ? <p className="muted">{loadError}</p> : null}
+        {loadErrors.map((error) => (
+          <p key={error} className="muted">
+            {error}
+          </p>
+        ))}
       </header>
 
       <section className="flight-strip">
@@ -890,6 +959,33 @@ export function App() {
               </div>
             )}
             <div className="viewer__scrim" />
+            {showSyncNotice ? (
+              <div className="sync-notice-wrap">
+                <div
+                  className={`sync-notice sync-notice--${
+                    sync.detectionStatus === "done"
+                      ? "success"
+                      : sync.detectionStatus === "failed"
+                        ? "error"
+                        : "running"
+                  }`}
+                >
+                  <span className="sync-notice__eyebrow">Auto sync</span>
+                  <strong className="sync-notice__title">
+                    {sync.detectionStatus === "running"
+                      ? "Scanning DVR..."
+                      : sync.detectionStatus === "done"
+                        ? "Sync OK"
+                        : "Sync failed"}
+                  </strong>
+                  <p className="sync-notice__message">
+                    {sync.detectionStatus === "running"
+                      ? "Looking for ARMED in the DVR."
+                      : sync.detectionMessage ?? "Auto sync finished."}
+                  </p>
+                </div>
+              </div>
+            ) : null}
             {snapshot ? (
               <>
                 <div className="overlay overlay--top">
@@ -907,12 +1003,12 @@ export function App() {
                 </div>
                 <div className="overlay overlay--summary">
                   <TinyMetric label="Status" value={overlaySummary.label} />
-                  <TinyMetric label="Roll err" value={snapshot.error.roll.toFixed(1)} />
-                  <TinyMetric label="Pitch err" value={snapshot.error.pitch.toFixed(1)} />
-                  <TinyMetric label="Yaw err" value={snapshot.error.yaw.toFixed(1)} />
+                  <TinyMetric label="Roll err" value={formatMaybeValue(snapshot.error.roll, 1)} />
+                  <TinyMetric label="Pitch err" value={formatMaybeValue(snapshot.error.pitch, 1)} />
+                  <TinyMetric label="Yaw err" value={formatMaybeValue(snapshot.error.yaw, 1)} />
                   <TinyMetric
                     label="Headroom"
-                    value={overlaySummary.saturation ? "Limited" : "OK"}
+                    value={motorStats?.max === null ? "n/a" : overlaySummary.saturation ? "Limited" : "OK"}
                   />
                 </div>
                 <div className="overlay overlay--sticks overlay--sticks-left">
@@ -920,8 +1016,8 @@ export function App() {
                     title="Throttle / Yaw"
                     xValue={mapStickAxis(snapshot.rc.yaw)}
                     yValue={mapThrottleAxis(snapshot.rc.throttle)}
-                    xLabel={`Yaw rc ${snapshot.rc.yaw.toFixed(0)} / sp ${snapshot.setpoint.yaw.toFixed(0)}`}
-                    yLabel={`Thr rc ${snapshot.rc.throttle.toFixed(0)} / raw ${formatMaybeValue(snapshot.rcRaw.throttle, 0, "%")}`}
+                    xLabel={`Yaw rc ${formatMaybeValue(snapshot.rc.yaw, 0)} / sp ${formatMaybeValue(snapshot.setpoint.yaw, 0)}`}
+                    yLabel={`Thr rc ${formatMaybeValue(snapshot.rc.throttle, 0)} / raw ${formatMaybeValue(snapshot.rcRaw.throttle, 0, "%")}`}
                     trail={stickTrail.left}
                     rawPoint={
                       snapshot.rcRaw.yaw !== null && snapshot.rcRaw.throttle !== null
@@ -931,10 +1027,10 @@ export function App() {
                           }
                         : null
                     }
-                    setpointPoint={{
-                      x: mapStickAxis(snapshot.setpoint.yaw),
-                      y: mapThrottleAxis(snapshot.rc.throttle),
-                    }}
+                    setpointPoint={mapMaybePoint(
+                      mapStickAxis(snapshot.setpoint.yaw),
+                      mapThrottleAxis(snapshot.rc.throttle)
+                    )}
                     miniGraph={
                       overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
                         <StickHistoryMini
@@ -966,22 +1062,22 @@ export function App() {
                   <StickOverlay
                     title="Roll / Pitch"
                     xValue={mapStickAxis(snapshot.rc.roll)}
-                    yValue={mapStickAxis(-snapshot.rc.pitch)}
-                    xLabel={`Roll rc ${snapshot.rc.roll.toFixed(0)} / sp ${snapshot.setpoint.roll.toFixed(0)}`}
-                    yLabel={`Pitch rc ${snapshot.rc.pitch.toFixed(0)} / sp ${snapshot.setpoint.pitch.toFixed(0)}`}
+                    yValue={mapStickAxis(negateMaybe(snapshot.rc.pitch))}
+                    xLabel={`Roll rc ${formatMaybeValue(snapshot.rc.roll, 0)} / sp ${formatMaybeValue(snapshot.setpoint.roll, 0)}`}
+                    yLabel={`Pitch rc ${formatMaybeValue(snapshot.rc.pitch, 0)} / sp ${formatMaybeValue(snapshot.setpoint.pitch, 0)}`}
                     trail={stickTrail.right}
                     rawPoint={
                       snapshot.rcRaw.roll !== null && snapshot.rcRaw.pitch !== null
                         ? {
                             x: mapStickAxis(snapshot.rcRaw.roll),
-                            y: mapStickAxis(-snapshot.rcRaw.pitch),
+                            y: mapStickAxis(negateMaybe(snapshot.rcRaw.pitch)),
                           }
                         : null
                     }
-                    setpointPoint={{
-                      x: mapStickAxis(snapshot.setpoint.roll),
-                      y: mapStickAxis(-snapshot.setpoint.pitch),
-                    }}
+                    setpointPoint={mapMaybePoint(
+                      mapStickAxis(snapshot.setpoint.roll),
+                      mapStickAxis(negateMaybe(snapshot.setpoint.pitch))
+                    )}
                     miniGraph={
                       overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
                         <StickHistoryMini
@@ -1013,13 +1109,20 @@ export function App() {
                 <div className="overlay overlay--bottom">
                   <StatusPill
                     label="Motor max"
-                    value={percent(motorStats?.max ?? 0)}
+                    value={percent(motorStats?.max)}
                     accent={overlaySummary.saturation ? "warning" : "neutral"}
                   />
-                  <StatusPill label="Motor spread" value={percent(motorStats?.spread ?? 0)} />
-                  <StatusPill label="RPM avg" value={`${Math.round(rpmStats?.avg ?? 0)}`} />
+                  <StatusPill label="Motor spread" value={percent(motorStats?.spread)} />
+                  <StatusPill
+                    label="RPM avg"
+                    value={rpmStats?.avg === null ? "n/a" : `${Math.round(rpmStats.avg)}`}
+                  />
                   {snapshot.aux.slice(0, 3).map((aux) => (
-                    <StatusPill key={aux.label} label={aux.label} value={aux.active ? "High" : "Low"} />
+                    <StatusPill
+                      key={aux.label}
+                      label={aux.label}
+                      value={aux.active === null ? "n/a" : aux.active ? "High" : "Low"}
+                    />
                   ))}
                 </div>
               </>
@@ -1054,8 +1157,12 @@ export function App() {
                 Auto sync
                 <div className="timeline__sync-status">
                   {sync.detectionStatus === "running"
-                    ? "Scanning..."
-                    : sync.detectionMessage ?? "Not run"}
+                    ? "Scanning in viewer..."
+                    : sync.detectionStatus === "done"
+                      ? `OK: ${sync.detectionMessage ?? "Auto sync finished."}`
+                      : sync.detectionStatus === "failed"
+                        ? `NG: ${sync.detectionMessage ?? "Auto sync failed."}`
+                        : sync.detectionMessage ?? "Not run"}
                 </div>
               </label>
             </div>

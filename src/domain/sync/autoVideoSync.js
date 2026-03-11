@@ -13,6 +13,10 @@ const NORMALIZED_WIDTH = 320;
 const NORMALIZED_HEIGHT = 120;
 const MIN_LIT_PIXELS = 40;
 
+function getCanvasContext(canvas) {
+  return canvas.getContext("2d", { willReadFrequently: true });
+}
+
 function getWorker() {
   if (!workerPromise) {
     workerPromise = createWorker("eng");
@@ -47,28 +51,52 @@ async function createAnalysisVideo(url) {
   video.muted = true;
   video.preload = "auto";
   await waitForEvent(video, "loadedmetadata");
+  if (video.readyState < 2) {
+    try {
+      await waitForEvent(video, "loadeddata");
+    } catch {
+      // Some browsers do not eagerly buffer object URLs until seek time.
+    }
+  }
   return video;
 }
 
 async function seekVideo(video, timeSeconds) {
   const clamped = Math.max(0, Math.min(timeSeconds, Math.max(video.duration - 0.05, 0)));
   if (Math.abs(video.currentTime - clamped) < 0.01) {
+    if (video.readyState < 2) {
+      await waitForEvent(video, "loadeddata");
+    }
     return;
   }
   video.currentTime = clamped;
   await waitForEvent(video, "seeked");
+  if (video.readyState < 2) {
+    await waitForEvent(video, "loadeddata");
+  }
 }
 
 function preprocessRegion(video, preset) {
+  if (!video.videoWidth || !video.videoHeight) {
+    return null;
+  }
+
   const cropWidth = Math.floor(video.videoWidth * preset.width);
   const cropHeight = Math.floor(video.videoHeight * preset.height);
   const sx = Math.floor(video.videoWidth * preset.x);
   const sy = Math.floor(video.videoHeight * preset.y);
 
+  if (!cropWidth || !cropHeight) {
+    return null;
+  }
+
   const canvas = document.createElement("canvas");
   canvas.width = cropWidth * 2;
   canvas.height = cropHeight * 2;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const context = getCanvasContext(canvas);
+  if (!context) {
+    return null;
+  }
 
   context.drawImage(
     video,
@@ -99,7 +127,10 @@ function preprocessRegion(video, preset) {
 }
 
 function cropToLitBounds(canvas, paddingRatio = 0.18) {
-  const context = canvas.getContext("2d", { willReadFrequently: true });
+  const context = getCanvasContext(canvas);
+  if (!context) {
+    return null;
+  }
   const image = context.getImageData(0, 0, canvas.width, canvas.height);
   const { data } = image;
 
@@ -136,9 +167,11 @@ function cropToLitBounds(canvas, paddingRatio = 0.18) {
   const cropped = document.createElement("canvas");
   cropped.width = sw;
   cropped.height = sh;
-  cropped
-    .getContext("2d", { willReadFrequently: true })
-    .drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+  const croppedContext = getCanvasContext(cropped);
+  if (!croppedContext) {
+    return null;
+  }
+  croppedContext.drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
   return cropped;
 }
 
@@ -146,7 +179,10 @@ function normalizeCanvas(canvas, width = NORMALIZED_WIDTH, height = NORMALIZED_H
   const normalized = document.createElement("canvas");
   normalized.width = width;
   normalized.height = height;
-  const context = normalized.getContext("2d", { willReadFrequently: true });
+  const context = getCanvasContext(normalized);
+  if (!context) {
+    return null;
+  }
 
   context.fillStyle = "black";
   context.fillRect(0, 0, width, height);
@@ -173,7 +209,10 @@ function getTemplates(width, height) {
     const canvas = document.createElement("canvas");
     canvas.width = width;
     canvas.height = height;
-    const context = canvas.getContext("2d", { willReadFrequently: true });
+    const context = getCanvasContext(canvas);
+    if (!context) {
+      return null;
+    }
 
     context.fillStyle = "black";
     context.fillRect(0, 0, width, height);
@@ -201,17 +240,24 @@ function getTemplates(width, height) {
     return canvas;
   });
 
-  templateCache.set(key, templates);
-  return templates;
+  const validTemplates = templates.filter(Boolean);
+  templateCache.set(key, validTemplates);
+  return validTemplates;
 }
 
 function scoreTemplate(frameCanvas, templateCanvas) {
-  const frame = frameCanvas
-    .getContext("2d", { willReadFrequently: true })
-    .getImageData(0, 0, frameCanvas.width, frameCanvas.height).data;
-  const template = templateCanvas
-    .getContext("2d", { willReadFrequently: true })
-    .getImageData(0, 0, templateCanvas.width, templateCanvas.height).data;
+  const frameContext = getCanvasContext(frameCanvas);
+  const templateContext = getCanvasContext(templateCanvas);
+  if (!frameContext || !templateContext) {
+    return 0;
+  }
+  const frame = frameContext.getImageData(0, 0, frameCanvas.width, frameCanvas.height).data;
+  const template = templateContext.getImageData(
+    0,
+    0,
+    templateCanvas.width,
+    templateCanvas.height
+  ).data;
 
   let overlap = 0;
   let frameLit = 0;
@@ -239,12 +285,18 @@ function detectByTemplate(video) {
 
   for (const preset of REGION_PRESETS) {
     const processed = preprocessRegion(video, preset);
+    if (!processed) {
+      continue;
+    }
     const cropped = cropToLitBounds(processed);
     if (!cropped) {
       continue;
     }
 
     const canvas = normalizeCanvas(cropped);
+    if (!canvas) {
+      continue;
+    }
     const templates = getTemplates(canvas.width, canvas.height);
 
     for (const template of templates) {
