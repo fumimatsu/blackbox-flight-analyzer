@@ -387,15 +387,30 @@ input {
 }
 
 .trend-metric__values {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  min-width: 108px;
 }
 
 .trend-metric__value {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 4px;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.trend-metric__value-label {
+  justify-self: start;
+}
+
+.trend-metric__value-number {
+  justify-self: end;
+  min-width: 28px;
 }
 
 .trend-metric__value--roll {

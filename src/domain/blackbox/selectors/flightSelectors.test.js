@@ -70,13 +70,16 @@ describe("flightSelectors baseline fixture", () => {
   it("builds a fixed-interval window with stable sample positions", () => {
     const startUs = session.minTimeUs + 1000000;
     const endUs = startUs + 2000000;
+    const sampleIntervalUs = 25000;
     const window = getFlightWindow(session, startUs, endUs, 7, {
       sampleStrategy: "fixed-interval",
+      sampleIntervalUs,
+      anchorUs: session.minTimeUs,
     });
 
     expect(window.startUs).toBe(startUs);
     expect(window.endUs).toBe(endUs);
-    expect(window.samples).toHaveLength(7);
+    expect(window.samples.length).toBeGreaterThan(2);
     expect(window.samples[0].timeUs).toBe(startUs);
     expect(window.samples[window.samples.length - 1].timeUs).toBe(endUs);
 
@@ -85,5 +88,47 @@ describe("flightSelectors baseline fixture", () => {
         window.samples[index - 1].timeUs
       );
     }
+
+    const interiorSamples = window.samples.slice(1, -1);
+    expect(
+      interiorSamples.every(
+        (sample) => (sample.timeUs - session.minTimeUs) % sampleIntervalUs === 0
+      )
+    ).toBe(true);
+  });
+
+  it("keeps anchored fixed-interval samples stable across overlapping windows", () => {
+    const sampleIntervalUs = 25000;
+    const firstWindow = getFlightWindow(
+      session,
+      session.minTimeUs + 1000000,
+      session.minTimeUs + 3000000,
+      120,
+      {
+        sampleStrategy: "fixed-interval",
+        sampleIntervalUs,
+        anchorUs: session.minTimeUs,
+      }
+    );
+    const secondWindow = getFlightWindow(
+      session,
+      session.minTimeUs + 1100000,
+      session.minTimeUs + 3100000,
+      120,
+      {
+        sampleStrategy: "fixed-interval",
+        sampleIntervalUs,
+        anchorUs: session.minTimeUs,
+      }
+    );
+
+    const firstInteriorTimes = new Set(firstWindow.samples.slice(1, -1).map((sample) => sample.timeUs));
+    const overlappingTimes = secondWindow.samples
+      .slice(1, -1)
+      .map((sample) => sample.timeUs)
+      .filter((timeUs) => timeUs > firstWindow.startUs && timeUs < firstWindow.endUs);
+
+    expect(overlappingTimes.length).toBeGreaterThan(0);
+    expect(overlappingTimes.every((timeUs) => firstInteriorTimes.has(timeUs))).toBe(true);
   });
 });

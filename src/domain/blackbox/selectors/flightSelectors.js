@@ -234,8 +234,33 @@ function mapSampleFromFrame(session, frame, timeUs = null) {
   };
 }
 
-function buildFixedSampleTimes(startUs, endUs, limit) {
-  if (limit <= 1 || endUs <= startUs) {
+function buildFixedSampleTimes(startUs, endUs, limit, options = {}) {
+  if (endUs <= startUs) {
+    return [startUs];
+  }
+
+  const sampleIntervalUs = options.sampleIntervalUs ?? null;
+  const anchorUs = options.anchorUs ?? 0;
+
+  if (sampleIntervalUs && sampleIntervalUs > 0) {
+    const times = [startUs];
+    const firstAlignedUs =
+      Math.ceil((startUs - anchorUs) / sampleIntervalUs) * sampleIntervalUs + anchorUs;
+
+    for (let timeUs = firstAlignedUs; timeUs < endUs; timeUs += sampleIntervalUs) {
+      if (timeUs > startUs) {
+        times.push(timeUs);
+      }
+    }
+
+    if (times[times.length - 1] !== endUs) {
+      times.push(endUs);
+    }
+
+    return times;
+  }
+
+  if (limit <= 1) {
     return [startUs];
   }
 
@@ -349,7 +374,7 @@ export function getFlightWindow(
   const sampleStrategy = options.sampleStrategy ?? "frames";
 
   if (sampleStrategy === "fixed-interval") {
-    const sampleTimes = buildFixedSampleTimes(windowStart, windowEnd, limit);
+    const sampleTimes = buildFixedSampleTimes(windowStart, windowEnd, limit, options);
 
     return {
       startUs: windowStart,

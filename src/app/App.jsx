@@ -23,6 +23,8 @@ import {
   detectArmedOverlayTime,
 } from "../domain/sync/autoVideoSync.js";
 
+const OVERLAY_SAMPLE_INTERVAL_US = 25000;
+
 function formatMicroseconds(timeUs) {
   const totalMs = Math.max(0, Math.round(timeUs / 1000));
   const minutes = Math.floor(totalMs / 60000);
@@ -317,6 +319,98 @@ function multiPolylinePoints(seriesList, width, height, minValue, maxValue) {
   });
 }
 
+function getStatusSegments(samples, minDurationUs = 100000) {
+  const derived = samples.map((sample) => ({
+    timeUs: sample.timeUs,
+    label: getFlightStatusSummary(sample).label,
+  }));
+
+  if (!derived.length) {
+    return [];
+  }
+
+  const buildRuns = (items) => {
+    const runs = [];
+
+    for (const sample of items) {
+      const last = runs[runs.length - 1];
+      if (last && last.label === sample.label) {
+        last.endUs = sample.timeUs;
+        last.count += 1;
+        continue;
+      }
+
+      runs.push({
+        label: sample.label,
+        startUs: sample.timeUs,
+        endUs: sample.timeUs,
+        count: 1,
+      });
+    }
+
+    return runs;
+  };
+
+  const expandRuns = (runs) =>
+    runs.flatMap((run) =>
+      Array.from({ length: run.count }, (_, index) => ({
+        timeUs:
+          run.count <= 1
+            ? run.startUs
+            : Math.round(
+                run.startUs + ((run.endUs - run.startUs) * index) / (run.count - 1)
+              ),
+        label: run.label,
+      }))
+    );
+
+  let runs = buildRuns(derived);
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (let index = 0; index < runs.length; index += 1) {
+      const run = runs[index];
+      const durationUs = run.endUs - run.startUs;
+      if (durationUs >= minDurationUs || runs.length <= 1) {
+        continue;
+      }
+
+      const previous = runs[index - 1] ?? null;
+      const next = runs[index + 1] ?? null;
+      let replacementLabel = null;
+
+      if (previous && next && previous.label === next.label) {
+        replacementLabel = previous.label;
+      } else if (previous && next) {
+        const previousDurationUs = previous.endUs - previous.startUs;
+        const nextDurationUs = next.endUs - next.startUs;
+        replacementLabel =
+          previousDurationUs >= nextDurationUs ? previous.label : next.label;
+      } else if (previous) {
+        replacementLabel = previous.label;
+      } else if (next) {
+        replacementLabel = next.label;
+      }
+
+      if (!replacementLabel || replacementLabel === run.label) {
+        continue;
+      }
+
+      runs[index] = {
+        ...run,
+        label: replacementLabel,
+      };
+      runs = buildRuns(expandRuns(runs));
+      changed = true;
+      break;
+    }
+  }
+
+  return runs;
+}
+
 function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
   const width = 176;
   const height = 38;
@@ -360,16 +454,31 @@ function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
         <span>Error</span>
         <div className="trend-metric__values">
           <strong className="trend-metric__value trend-metric__value--roll">
-            R {formatMaybeValue(snapshot.error.roll === null ? null : Math.abs(snapshot.error.roll), 1)}
+            <span className="trend-metric__value-label">R</span>
+            <span className="trend-metric__value-number">
+              {formatMaybeValue(
+                snapshot.error.roll === null ? null : Math.abs(snapshot.error.roll),
+                1
+              )}
+            </span>
           </strong>
           <strong className="trend-metric__value trend-metric__value--pitch">
-            P {formatMaybeValue(
-              snapshot.error.pitch === null ? null : Math.abs(snapshot.error.pitch),
-              1
-            )}
+            <span className="trend-metric__value-label">P</span>
+            <span className="trend-metric__value-number">
+              {formatMaybeValue(
+                snapshot.error.pitch === null ? null : Math.abs(snapshot.error.pitch),
+                1
+              )}
+            </span>
           </strong>
           <strong className="trend-metric__value trend-metric__value--yaw">
-            Y {formatMaybeValue(snapshot.error.yaw === null ? null : Math.abs(snapshot.error.yaw), 1)}
+            <span className="trend-metric__value-label">Y</span>
+            <span className="trend-metric__value-number">
+              {formatMaybeValue(
+                snapshot.error.yaw === null ? null : Math.abs(snapshot.error.yaw),
+                1
+              )}
+            </span>
           </strong>
         </div>
       </div>
@@ -415,28 +524,11 @@ function statusClassName(label) {
 function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
   const width = 176;
   const height = 34;
-  const derived = samples.map((sample) => ({
-    timeUs: sample.timeUs,
-    label: getFlightStatusSummary(sample).label,
-  }));
-  const startUs = derived[0]?.timeUs ?? 0;
-  const endUs = derived[derived.length - 1]?.timeUs ?? startUs;
+  const segments = getStatusSegments(samples);
+  const startUs = samples[0]?.timeUs ?? 0;
+  const endUs = samples[samples.length - 1]?.timeUs ?? startUs;
   const rangeUs = Math.max(endUs - startUs, 1);
   const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
-  const segments = [];
-
-  for (const sample of derived) {
-    const last = segments[segments.length - 1];
-    if (last && last.label === sample.label) {
-      last.endUs = sample.timeUs;
-      continue;
-    }
-    segments.push({
-      label: sample.label,
-      startUs: sample.timeUs,
-      endUs: sample.timeUs,
-    });
-  }
 
   return (
     <div className="status-timeline">
@@ -836,7 +928,11 @@ export function App() {
       currentTimeUs - overlayState.stickMiniGraphWindowUs,
       currentTimeUs + overlayState.stickMiniGraphWindowUs,
       180,
-      { sampleStrategy: "fixed-interval" }
+      {
+        sampleStrategy: "fixed-interval",
+        sampleIntervalUs: OVERLAY_SAMPLE_INTERVAL_US,
+        anchorUs: preparedFlight.minTimeUs,
+      }
     );
   }, [preparedFlight, currentTimeUs, overlayState.stickMiniGraphWindowUs]);
 
@@ -853,7 +949,11 @@ export function App() {
       currentTimeUs - 1000000,
       currentTimeUs + 1000000,
       120,
-      { sampleStrategy: "fixed-interval" }
+      {
+        sampleStrategy: "fixed-interval",
+        sampleIntervalUs: OVERLAY_SAMPLE_INTERVAL_US,
+        anchorUs: preparedFlight.minTimeUs,
+      }
     );
   }, [preparedFlight, currentTimeUs]);
 
