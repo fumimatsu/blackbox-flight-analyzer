@@ -13,6 +13,7 @@ import {
 import { detectAnalysisEvents } from "../domain/blackbox/events/detectEvents.js";
 import { EVENT_TYPES, getEventLabel } from "../domain/blackbox/events/eventConfig.js";
 import {
+  getFlightStatusFlags,
   getFlightStatusSummary,
   getMotorStats,
   getRpmStats,
@@ -409,96 +410,35 @@ function multiPolylinePoints(seriesList, width, height, minValue, maxValue) {
   });
 }
 
-function getStatusSegments(samples, minDurationUs = 100000) {
-  const derived = samples.map((sample) => ({
-    timeUs: sample.timeUs,
-    label: getFlightStatusSummary(sample).label,
-  }));
+function getFlagSegments(samples, flagKey, minDurationUs = 100000) {
+  const segments = [];
+  let currentStartUs = null;
+  let currentEndUs = null;
 
-  if (!derived.length) {
-    return [];
-  }
+  for (const sample of samples) {
+    const flags = getFlightStatusFlags(sample);
+    const active = Boolean(flags[flagKey]);
 
-  const buildRuns = (items) => {
-    const runs = [];
-
-    for (const sample of items) {
-      const last = runs[runs.length - 1];
-      if (last && last.label === sample.label) {
-        last.endUs = sample.timeUs;
-        last.count += 1;
-        continue;
-      }
-
-      runs.push({
-        label: sample.label,
-        startUs: sample.timeUs,
-        endUs: sample.timeUs,
-        count: 1,
-      });
+    if (active) {
+      currentStartUs ??= sample.timeUs;
+      currentEndUs = sample.timeUs;
+      continue;
     }
 
-    return runs;
-  };
-
-  const expandRuns = (runs) =>
-    runs.flatMap((run) =>
-      Array.from({ length: run.count }, (_, index) => ({
-        timeUs:
-          run.count <= 1
-            ? run.startUs
-            : Math.round(
-                run.startUs + ((run.endUs - run.startUs) * index) / (run.count - 1)
-              ),
-        label: run.label,
-      }))
-    );
-
-  let runs = buildRuns(derived);
-  let changed = true;
-
-  while (changed) {
-    changed = false;
-
-    for (let index = 0; index < runs.length; index += 1) {
-      const run = runs[index];
-      const durationUs = run.endUs - run.startUs;
-      if (durationUs >= minDurationUs || runs.length <= 1) {
-        continue;
+    if (currentStartUs !== null && currentEndUs !== null) {
+      if (currentEndUs - currentStartUs >= minDurationUs) {
+        segments.push({ startUs: currentStartUs, endUs: currentEndUs });
       }
-
-      const previous = runs[index - 1] ?? null;
-      const next = runs[index + 1] ?? null;
-      let replacementLabel = null;
-
-      if (previous && next && previous.label === next.label) {
-        replacementLabel = previous.label;
-      } else if (previous && next) {
-        const previousDurationUs = previous.endUs - previous.startUs;
-        const nextDurationUs = next.endUs - next.startUs;
-        replacementLabel =
-          previousDurationUs >= nextDurationUs ? previous.label : next.label;
-      } else if (previous) {
-        replacementLabel = previous.label;
-      } else if (next) {
-        replacementLabel = next.label;
-      }
-
-      if (!replacementLabel || replacementLabel === run.label) {
-        continue;
-      }
-
-      runs[index] = {
-        ...run,
-        label: replacementLabel,
-      };
-      runs = buildRuns(expandRuns(runs));
-      changed = true;
-      break;
+      currentStartUs = null;
+      currentEndUs = null;
     }
   }
 
-  return runs;
+  if (currentStartUs !== null && currentEndUs !== null && currentEndUs - currentStartUs >= minDurationUs) {
+    segments.push({ startUs: currentStartUs, endUs: currentEndUs });
+  }
+
+  return segments;
 }
 
 function ErrorTrendCard({ snapshot, samples, currentTimeUs }) {
@@ -613,12 +553,21 @@ function statusClassName(label) {
 
 function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
   const width = 176;
-  const height = 34;
-  const segments = getStatusSegments(samples);
+  const laneConfigs = [
+    { key: "headroomLimited", label: "Headroom" },
+    { key: "trackingOff", label: "Tracking" },
+    { key: "highSpeedRun", label: "High throttle" },
+    { key: "throttleOff", label: "Throttle off" },
+  ];
+  const laneHeight = 12;
+  const laneGap = 4;
+  const topPad = 2;
+  const height = topPad * 2 + laneConfigs.length * laneHeight + (laneConfigs.length - 1) * laneGap;
   const startUs = samples[0]?.timeUs ?? 0;
   const endUs = samples[samples.length - 1]?.timeUs ?? startUs;
   const rangeUs = Math.max(endUs - startUs, 1);
   const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
+  const activeFlags = snapshot ? getFlightStatusFlags(snapshot) : null;
 
   return (
     <div className="status-timeline">
@@ -628,25 +577,60 @@ function StatusTimelineCard({ snapshot, samples, currentTimeUs }) {
       </div>
       <svg viewBox={`0 0 ${width} ${height}`} className="status-timeline__chart">
         <rect x="0" y="0" width={width} height={height} className="status-timeline__bg" />
-        {segments.map((segment, index) => {
-          const x = ((segment.startUs - startUs) / rangeUs) * width;
-          const endX = ((segment.endUs - startUs) / rangeUs) * width;
+        {laneConfigs.map((lane, laneIndex) => {
+          const y = topPad + laneIndex * (laneHeight + laneGap);
+          const segments = getFlagSegments(samples, lane.key);
+
           return (
-            <rect
-              key={`${segment.label}-${index}`}
-              x={x}
-              y="6"
-              width={Math.max(endX - x, 6)}
-              height={height - 12}
-              rx="6"
-              className={`status-timeline__segment status-timeline__segment--${statusClassName(
-                segment.label
-              )}`}
-            />
+            <g key={lane.key}>
+              <rect
+                x="0"
+                y={y}
+                width={width}
+                height={laneHeight}
+                rx="5"
+                className="status-timeline__lane"
+              />
+              {segments.map((segment, index) => {
+                const x = ((segment.startUs - startUs) / rangeUs) * width;
+                const endX = ((segment.endUs - startUs) / rangeUs) * width;
+                return (
+                  <rect
+                    key={`${lane.key}-${index}`}
+                    x={x}
+                    y={y}
+                    width={Math.max(endX - x, 5)}
+                    height={laneHeight}
+                    rx="5"
+                    className={`status-timeline__segment status-timeline__segment--${statusClassName(
+                      lane.label
+                    )}`}
+                  />
+                );
+              })}
+              {activeFlags?.[lane.key] ? (
+                <circle
+                  cx="6"
+                  cy={y + laneHeight / 2}
+                  r="2.5"
+                  className={`status-timeline__marker status-timeline__marker--${statusClassName(
+                    lane.label
+                  )}`}
+                />
+              ) : null}
+            </g>
           );
         })}
         <line x1={cursorX} x2={cursorX} y1="0" y2={height} className="status-timeline__cursor" />
       </svg>
+      <div className="status-timeline__legend">
+        {laneConfigs.map((lane) => (
+          <span key={lane.key} className="status-timeline__legend-item">
+            <i className={`status-timeline__legend-dot status-timeline__legend-dot--${statusClassName(lane.label)}`} />
+            {lane.label}
+          </span>
+        ))}
+      </div>
     </div>
   );
 }

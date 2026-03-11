@@ -47,27 +47,46 @@ export function getErrorMagnitude(error) {
   return Math.max(...values.map((value) => Math.abs(value)));
 }
 
-export function getFlightStatusSummary(snapshot) {
+export function getFlightStatusFlags(snapshot) {
   const motor = getMotorStats(snapshot.motors);
   const rpm = getRpmStats(snapshot.rpm);
   const throttleBand = getThrottleBand(snapshot.rc.throttle);
   const saturation = getSaturationFlag(snapshot);
   const errorMagnitude = getErrorMagnitude(snapshot.error);
-
-  let label = "Settled";
-  if (throttleBand === "unknown" && errorMagnitude === null && motor.max === null) {
-    label = "Data incomplete";
-  } else if (saturation) label = "Headroom limited";
-  else if (errorMagnitude !== null && errorMagnitude >= 120) label = "Tracking off";
-  else if (throttleBand === "high") label = "High-speed run";
-  else if (throttleBand === "idle") label = "Throttle off";
+  const dataIncomplete =
+    throttleBand === "unknown" && errorMagnitude === null && motor.max === null;
 
   return {
-    label,
+    dataIncomplete,
+    headroomLimited: saturation,
+    trackingOff: errorMagnitude !== null && errorMagnitude >= 120,
+    highSpeedRun: throttleBand === "high",
+    throttleOff: throttleBand === "idle",
     throttleBand,
-    saturation,
     errorMagnitude,
     motor,
     rpm,
+  };
+}
+
+export function getFlightStatusSummary(snapshot) {
+  const status = getFlightStatusFlags(snapshot);
+
+  let label = "Settled";
+  if (status.dataIncomplete) {
+    label = "Data incomplete";
+  } else if (status.headroomLimited) label = "Headroom limited";
+  else if (status.trackingOff) label = "Tracking off";
+  else if (status.highSpeedRun) label = "High-speed run";
+  else if (status.throttleOff) label = "Throttle off";
+
+  return {
+    label,
+    throttleBand: status.throttleBand,
+    saturation: status.headroomLimited,
+    errorMagnitude: status.errorMagnitude,
+    motor: status.motor,
+    rpm: status.rpm,
+    flags: status,
   };
 }
