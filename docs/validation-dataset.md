@@ -42,16 +42,25 @@ baseline では最低でも次を毎回見直すこと。
 | --- | --- | --- | --- | --- | --- | --- |
 | LOG-001 | BBL | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.BBL` | Current baseline log for end-to-end review | Log opens, snapshot selectors stay stable, event list renders | Readable. One flight tab shown. Duration observed as `01:14.944`. Overlay and compact history render. Event list showed 12 entries in the current baseline review. | 成功 |
 | LOG-002 | BBL | `BTFL_BLACKBOX_LOG_HYPER_20260308_145916_FOXEERF722V4.BBL` | Unknown-header warning tolerance | Parser prints warnings but review UI still loads | The baseline log emits many `Ignoring unsupported header ...` warnings and still loads successfully. This currently doubles as the unknown-header sample. | 成功 |
-| LOG-003 | BBL | TBD | AUX / RPM variance or missing-field handling | Missing data should stay explicit and must not be shown as a valid zeroed signal | No fixed sample yet. Need a log where AUX or RPM fields differ from the baseline assumptions. | 未実施 |
-| LOG-004 | BBL | TBD | Multi-section `.BBL` handling | One file should surface as multiple readable flights, with readable sections selectable independently | Covered in adapter unit tests through `loadFlightSessionsFromFile()`, but not yet fixed with a real fixture in `data/`. | 部分成功 |
+| LOG-003 | BBL | `dataset-scan/20200413_PFM1_btfl_all.bbl` | AUX / RPM variance or missing-field handling | Missing data should stay explicit and must not be shown as a valid zeroed signal | Local inspection found `15` readable sections, `0` RPM fields in every readable section, and the review UI still opened the file without crashing. This is the current missing-RPM candidate. | 部分成功 |
+| LOG-004 | BBL | `dataset-scan/20240921_btfl_all.bbl` | Multi-section `.BBL` handling | One file should surface as multiple readable flights, with readable sections selectable independently | Local inspection found `2` readable sections and `0` unreadable sections. Both sections expose heading and setpoint fields, and the file is small enough to reuse as the first real multi-section fixture. | 成功 |
 | DVR-001 | DVR | `20260308.mp4` | Current baseline DVR for attach + sync | Video attaches, playback remains stable, auto sync can be re-checked from a known clip | Attach succeeds. Local review observed `1920x1080`, `60fps`, `135.808s`. Overlay stays responsive after attach. | 成功 |
 | DVR-002 | DVR | `20260308.mp4` | `ARMED` OCR success path | Auto sync should detect `ARMED` in the early clip and update offset | `Auto sync ARMED` detected `ARMED` at `2.75s` with `OCR 96%` and updated `Video offset` to `2.749501`. | 成功 |
-| DVR-003 | DVR | TBD | `ARMED` OCR failure path | Failure should be explicit and should return the user to manual offset adjustment without crashing | No fixed failure clip yet. Older observations from this same baseline clip are obsolete after the OCR improvements. | 未実施 |
+| DVR-003 | DVR | `dataset-scan/20260307_no_armed.mp4` | OCR false-positive handling when the clip should not contain `ARMED` | Auto sync should refuse low-confidence hits or report that `ARMED` was not found | The clip loaded, but the current detector returned `ARMED detected at 1.30s (OCR 21%)` even though this clip is expected to have no `ARMED` text. This is the current false-positive regression sample. | 失敗 |
+| DVR-004 | DVR | `dataset-scan/20200413_PFM1_PICT0028.AVI` | Failure-path handling for legacy / unsupported DVR containers | Failure should be explicit and should return the user to manual offset adjustment without crashing | Attach attempt left the UI alive and `Auto sync` reported `Failed while waiting for loadedmetadata.`. This is not an OCR miss; it is still useful as a deterministic failure-path sample. | 成功 |
+
+## Local Fixture Source Notes
+
+The following local archive paths are the current source of the new gitignored candidates on the owner machine:
+
+- `D:\iCloudDrive\iCloudDrive\DRONE\機体設定関係\BLACKBOXDATA\20240921\btfl_all.bbl`
+- `D:\iCloudDrive\iCloudDrive\DRONE\機体設定関係\BLACKBOXDATA\20200413\PFM-1\btfl_all.bbl`
+- `D:\iCloudDrive\iCloudDrive\DRONE\機体設定関係\BLACKBOXDATA\20200413\PFM-1\PICT0028.AVI`
+- `D:\iCloudDrive\iCloudDrive\movie\everydaydrone\insta連携\20260307.mp4`
 
 ## Current Gaps
 
-1. A real multi-section `.BBL` fixture in `data/`
-2. A real AUX / RPM variance sample
-3. A fixed OCR failure clip
-4. Manual offset adjustment notes after auto sync success and failure
-5. More than one DVR format or OSD style
+1. Manual offset adjustment notes after auto sync success, false positive, and load failure
+2. More than one DVR format or OSD style
+3. A non-baseline log with raw RC or other AUX-rich field layouts
+4. OCR guardrails so low-confidence hits like `20260307_no_armed.mp4` do not auto-apply offsets
