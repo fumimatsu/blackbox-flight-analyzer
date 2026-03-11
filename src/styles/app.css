@@ -458,6 +458,12 @@ input {
   right: 16px;
 }
 
+.overlay--right-metrics {
+  top: 58px;
+  right: 188px;
+  align-items: flex-start;
+}
+
 .overlay--sticks {
   bottom: 18px;
 }
@@ -1635,5 +1641,10 @@ option:hover {
     right: auto;
     width: auto;
     max-width: calc(100% - 32px);
+  }
+
+  .overlay--right-metrics {
+    top: 16px;
+    right: 162px;
   }
 }

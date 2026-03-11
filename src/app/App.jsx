@@ -1904,6 +1904,16 @@ export function App() {
                     />
                   </div>
                 ) : null}
+                {overlayState.bottomMetricsVisible ? (
+                  <div className="overlay overlay--right-metrics">
+                    <MotorDetailCard
+                      motors={snapshot.motors}
+                      spread={motorStats?.spread}
+                      saturation={overlaySummary.saturation}
+                      t={t}
+                    />
+                  </div>
+                ) : null}
                 {overlayState.stickOverlayVisible ? (
                   <>
                     <div className="overlay overlay--sticks overlay--sticks-left">
@@ -1934,12 +1944,6 @@ export function App() {
                 ) : null}
                 {overlayState.bottomMetricsVisible ? (
                   <div className="overlay overlay--bottom">
-                    <MotorDetailCard
-                      motors={snapshot.motors}
-                      spread={motorStats?.spread}
-                      saturation={overlaySummary.saturation}
-                      t={t}
-                    />
                     {snapshot.aux.slice(0, 3).map((aux) => (
                       <StatusPill
                         key={aux.label}
