@@ -224,6 +224,9 @@ export const enMessages = {
     loadedTurnTracking: "Loaded-turn tracking",
     loadedTurnTrackingMeaning:
       "Lower means less tracking error during committed roll-loaded turns.",
+    stickShapingGap: "Stick-side shaping gap",
+    stickShapingGapMeaning:
+      "Lower means RC command and setpoint motion stayed closer, with less nervous shaping between input and output.",
   },
   diagnostics: {
     title: "Review Insights",
@@ -274,6 +277,67 @@ export const enMessages = {
       "Compare the same chop-turn scene before blaming filters alone; low-throttle authority problems often look scene-specific.",
     dynamicIdleConfigured: "Dynamic Idle configured: {value}",
     dynamicIdleUnknown: "No Dynamic Idle setting found in the embedded config.",
+    stickSideLabel: "Stick-side command shaping worth checking",
+    stickSideEvidence:
+      "{axis} shows stick-to-setpoint shaping that may be more nervous than the visible move. Peak RC→SP gap {rcGap}, motion gap {deltaGap}, held updates {held}%. {smoothing}",
+    stickSideCheck1:
+      "Check feedforward amount, FF limit, and jitter reduction before blaming PID or filters alone.",
+    stickSideCheck2:
+      "Check whether RC smoothing is adding visible step/hold behavior relative to the intended stick move.",
+    stickSideCheck3:
+      "Compare the same smooth line or arc after feedforward or RC smoothing changes.",
+    stickSideConfig: "Embedded RC smoothing: {value}.",
+    stickSideNoConfig: "No embedded RC smoothing detail was found.",
+    rcLinkLabel: "RC link quality worth checking",
+    rcLinkEvidence:
+      "{mode} debug reports average link quality around {lq}%. Review the RC path before blaming motor-side tuning.",
+    rcLinkCheck1:
+      "Check receiver update consistency and radio link quality in the same scene.",
+    rcLinkCheck2:
+      "Compare raw input, RC command, and setpoint before changing feedforward or filtering.",
+    rcLinkCheck3:
+      "If the issue disappears on a calmer clip, the link or transmitter side may be part of the problem.",
+  },
+  stickReview: {
+    title: "Stick-side review",
+    description:
+      "Inspect whether nervous behavior may start in the RC / setpoint chain before blaming PID or filtering.",
+    empty: "Not enough RC / setpoint evidence yet for this scope.",
+    scope: "Scope",
+    primaryAxis: "Primary axis",
+    rcSetpointGap: "RC→SP gap",
+    rawCommandGap: "Raw→RC gap",
+    motionGap: "Motion gap",
+    heldInput: "Held updates",
+    activeSamples: "Active samples",
+    noRaw: "Raw unavailable",
+    noDebug: "No RC/feedforward debug data in this log.",
+    configTitle: "Embedded shaping",
+    debugTitle: "Debug evidence",
+    radioTitle: "Radio",
+    rssi: "RSSI",
+    linkQuality: "Link quality",
+    debugMode: "Debug mode",
+    roll: "Roll",
+    pitch: "Pitch",
+    yaw: "Yaw",
+    debug: {
+      setpointSpeed: "Setpoint speed",
+      rcDelta: "RC delta",
+      jitterAttenuator: "Jitter attenuator",
+      ffSmoothing: "FF smoothing",
+      smoothedRxRateHz: "Smoothed Rx",
+      ffPt1: "FF PT1",
+      outlierCount: "Outliers",
+      validCount: "Valid count",
+      frameRateMs: "Frame rate",
+      updateShare: "Update share",
+      packetIntervalMs: "Packet interval",
+      currentRxRateHz: "Current Rx",
+      linkQuality: "Link quality",
+      radioRssi: "Radio RSSI",
+      snr: "SNR",
+    },
   },
   status: {
     settled: "Settled",

@@ -1,6 +1,7 @@
 import { getErrorMagnitude, getFlightStatusSummary } from "../blackbox/derived/flightDerived.js";
 import { getEventLabel } from "../blackbox/events/eventConfig.js";
 import { translate } from "../../i18n/index.js";
+import { getStickIntentReviewSummary } from "../analysis/stickIntentReview.js";
 
 const MIN_TOTAL_SAMPLES = 20;
 const MIN_CONDITION_SAMPLES = 20;
@@ -80,6 +81,7 @@ function summarize(flight, eventType, locale) {
     ),
     highThrottleErrors: highThrottle,
     loadedTurnErrors: loadedTurn,
+    stickIntent: getStickIntentReviewSummary(selected.samples),
   };
 }
 
@@ -209,6 +211,16 @@ export function getCompareSummary(flightA, flightB, eventType = null, locale = "
       aValues: summaryA.loadedTurnErrors,
       bValues: summaryB.loadedTurnErrors,
       aggregate: mean,
+    }),
+    buildMetric({
+      locale,
+      label: translate(locale, "compare.stickShapingGap"),
+      meaning: translate(locale, "compare.stickShapingGapMeaning"),
+      unit: "",
+      aValues: definedNumbers([summaryA.stickIntent.primaryAxis?.rcSetpointDeltaGapMean]),
+      bValues: definedNumbers([summaryB.stickIntent.primaryAxis?.rcSetpointDeltaGapMean]),
+      aggregate: mean,
+      threshold: 1,
     }),
   ];
 

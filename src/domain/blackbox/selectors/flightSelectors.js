@@ -1,4 +1,5 @@
 import { FlightLogParser } from "../../../vendor/log-core/flightlog_parser.js";
+import { DEBUG_MODE } from "../../../vendor/log-core/flightlog_fielddefs.js";
 
 const AXES = ["roll", "pitch", "yaw"];
 const AXIS_INDEX = { roll: 0, pitch: 1, yaw: 2 };
@@ -131,6 +132,28 @@ function getRpmValues(session, frame) {
     .filter((value) => Number.isFinite(value));
 }
 
+function getDebugModeName(session) {
+  const modeIndex = session.log.getSysConfig()?.debug_mode;
+  if (modeIndex === null || modeIndex === undefined || Number.isNaN(modeIndex)) {
+    return null;
+  }
+  return DEBUG_MODE[modeIndex] ?? null;
+}
+
+function getDebugValues(session, frame) {
+  const values = Array.from({ length: 8 }, (_, index) =>
+    getValue(frame, session.fieldIndex[`debug[${index}]`])
+  );
+  return values.some((value) => isPresent(value)) ? values : null;
+}
+
+function getRadioState(session, frame) {
+  const rssi = getValue(frame, session.fieldIndex.rssi);
+  return {
+    rssi: isPresent(rssi) ? rssi : null,
+  };
+}
+
 function getAxisValue(session, frame, axis, kind, derived = {}) {
   const axisIndex = AXIS_INDEX[axis];
 
@@ -253,6 +276,11 @@ function mapSampleFromFrame(session, frame, timeUs = null) {
     motors: getMotorValues(session, frame),
     rpm: getRpmValues(session, frame),
     aux: getAuxChannels(session, frame),
+    debug: {
+      mode: getDebugModeName(session),
+      values: getDebugValues(session, frame),
+    },
+    radio: getRadioState(session, frame),
   };
 }
 

@@ -5,11 +5,14 @@ import {
 } from "../blackbox/derived/flightDerived.js";
 import { EVENT_TYPES } from "../blackbox/events/eventConfig.js";
 import { translate } from "../../i18n/index.js";
+import { getStickIntentReviewSummary } from "./stickIntentReview.js";
 
 const OFFICIAL_SOURCES = {
   freestyle: "https://www.betaflight.com/docs/wiki/guides/current/Freestyle-Tuning-Principles",
   tuning43: "https://www.betaflight.com/docs/wiki/tuning/4-3-Tuning-Notes",
   tuning42: "https://www.betaflight.com/docs/wiki/tuning/4-2-Tuning-Notes",
+  rxNotes: "https://www.betaflight.com/docs/development/Rx",
+  pidTab: "https://betaflight.com/docs/wiki/configurator/pid-tuning-tab",
 };
 
 function mean(values) {
@@ -43,6 +46,7 @@ function buildEvidence(flight, locale) {
     .map((status) => status.motor.max)
     .filter((value) => value !== null);
   const lowThrottleSummary = getLowThrottleReviewSummary(samples);
+  const stickIntentSummary = getStickIntentReviewSummary(samples, setupSummary);
   const dynamicIdleItem = setupSummary?.groups
     ?.find((group) => group.key === "idleThrottle")
     ?.items?.find((item) => item.key === "dynamicIdleMinRpm");
@@ -62,6 +66,7 @@ function buildEvidence(flight, locale) {
     peakError: max(errorMagnitudes),
     peakMotor: max(motorPeaks),
     lowThrottleSummary,
+    stickIntentSummary,
     dynamicIdleConfigured: dynamicIdleItem?.value ?? null,
   };
 }
@@ -205,6 +210,90 @@ export const DIAGNOSTIC_RULES = [
       return confidenceLabel(score);
     },
     officialSources: [OFFICIAL_SOURCES.freestyle, OFFICIAL_SOURCES.tuning43],
+  },
+  {
+    id: "stick-side-command-shaping",
+    labelKey: "diagnostics.stickSideLabel",
+    eventTypes: [
+      EVENT_TYPES.HIGH_THROTTLE_STRAIGHT,
+      EVENT_TYPES.LOADED_ROLL_ARC,
+      EVENT_TYPES.HIGH_ERROR_BURST,
+    ],
+    predicate(evidence) {
+      const primaryAxis = evidence.stickIntentSummary.primaryAxis;
+      if (!primaryAxis) {
+        return false;
+      }
+
+      return (
+        evidence.saturationShare < 0.08 &&
+        (
+          (primaryAxis.rcSetpointDeltaGapMean ?? 0) >= 14 ||
+          (primaryAxis.heldInputShare ?? 0) >= 0.24 ||
+          (primaryAxis.rawCommandGapMean ?? 0) >= 18
+        )
+      );
+    },
+    evidenceSummary(evidence, locale) {
+      const axis = evidence.stickIntentSummary.primaryAxis;
+      const smoothingState = evidence.stickIntentSummary.configuration.rcSmoothing
+        ? translate(locale, "diagnostics.stickSideConfig", {
+            value: evidence.stickIntentSummary.configuration.rcSmoothing,
+          })
+        : translate(locale, "diagnostics.stickSideNoConfig");
+
+      return translate(locale, "diagnostics.stickSideEvidence", {
+        axis: translate(locale, `overlay.${axis.axis}`),
+        rcGap: (axis.rcSetpointGapPeak ?? 0).toFixed(0),
+        deltaGap: (axis.rcSetpointDeltaGapMean ?? 0).toFixed(1),
+        held: Math.round((axis.heldInputShare ?? 0) * 100),
+        smoothing: smoothingState,
+      });
+    },
+    likelyCheckKeys: [
+      "diagnostics.stickSideCheck1",
+      "diagnostics.stickSideCheck2",
+      "diagnostics.stickSideCheck3",
+    ],
+    confidence(evidence) {
+      const axis = evidence.stickIntentSummary.primaryAxis;
+      const score = Math.min(
+        1,
+        ((axis.rcSetpointDeltaGapMean ?? 0) / 28) +
+          ((axis.heldInputShare ?? 0) * 1.2) +
+          ((axis.rawCommandGapMean ?? 0) / 60)
+      );
+      return confidenceLabel(score);
+    },
+    officialSources: [OFFICIAL_SOURCES.tuning43, OFFICIAL_SOURCES.pidTab],
+  },
+  {
+    id: "rc-link-quality",
+    labelKey: "diagnostics.rcLinkLabel",
+    eventTypes: [EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, EVENT_TYPES.HIGH_ERROR_BURST],
+    predicate(evidence) {
+      const linkQuality = evidence.stickIntentSummary.debug?.linkQualityAvg;
+      return linkQuality !== null && linkQuality !== undefined && linkQuality < 95;
+    },
+    evidenceSummary(evidence, locale) {
+      return translate(locale, "diagnostics.rcLinkEvidence", {
+        mode: evidence.stickIntentSummary.debug?.mode ?? "debug",
+        lq: Math.round(evidence.stickIntentSummary.debug?.linkQualityAvg ?? 0),
+      });
+    },
+    likelyCheckKeys: [
+      "diagnostics.rcLinkCheck1",
+      "diagnostics.rcLinkCheck2",
+      "diagnostics.rcLinkCheck3",
+    ],
+    confidence(evidence) {
+      const score = Math.min(
+        1,
+        Math.max(0, (100 - (evidence.stickIntentSummary.debug?.linkQualityAvg ?? 100)) / 12)
+      );
+      return confidenceLabel(score);
+    },
+    officialSources: [OFFICIAL_SOURCES.tuning43, OFFICIAL_SOURCES.rxNotes],
   },
 ];
 

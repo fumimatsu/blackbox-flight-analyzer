@@ -1964,6 +1964,22 @@ option:hover {
   word-break: break-word;
 }
 
+.stick-review-panel .compare-panel__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stick-review__metric strong,
+.stick-review__metric em {
+  display: block;
+}
+
+.stick-review-panel .compare-metric--context,
+.stick-review-panel .compare-metric--notes {
+  grid-column: span 2;
+}
+
 @media (max-width: 1280px) {
   .workspace {
     grid-template-columns: 1fr;
@@ -1983,6 +1999,15 @@ option:hover {
 
   .sidecar {
     grid-template-columns: 1fr;
+  }
+
+  .stick-review-panel .compare-panel__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .stick-review-panel .compare-metric--context,
+  .stick-review-panel .compare-metric--notes {
+    grid-column: span 1;
   }
 
   .overlay--summary {

@@ -12,6 +12,13 @@ function buildSample(timeUs, overrides = {}) {
       yaw: 0,
       ...(overrides.rc ?? {}),
     },
+    rcRaw: {
+      throttle: null,
+      roll: null,
+      pitch: null,
+      yaw: null,
+      ...(overrides.rcRaw ?? {}),
+    },
     setpoint: {
       roll: 0,
       pitch: 0,
@@ -26,6 +33,8 @@ function buildSample(timeUs, overrides = {}) {
     },
     motors: overrides.motors ?? [50, 52, 51, 53],
     rpm: [],
+    debug: overrides.debug ?? { mode: null, values: null },
+    radio: overrides.radio ?? { rssi: null },
   };
 }
 
@@ -112,5 +121,55 @@ describe("evaluateDiagnosticRules", () => {
     expect(
       insights.find((item) => item.id === "low-throttle-instability")?.evidenceSummary
     ).toContain("RPM");
+  });
+
+  it("surfaces stick-side command shaping when setpoint diverges from command motion", () => {
+    const samples = [
+      buildSample(0, {
+        rc: { roll: 0 },
+        rcRaw: { roll: 0 },
+        setpoint: { roll: 0 },
+      }),
+      buildSample(25000, {
+        rc: { roll: 30 },
+        rcRaw: { roll: 0 },
+        setpoint: { roll: 90 },
+      }),
+      buildSample(50000, {
+        rc: { roll: 80 },
+        rcRaw: { roll: 5 },
+        setpoint: { roll: 150 },
+      }),
+      buildSample(75000, {
+        rc: { roll: 82 },
+        rcRaw: { roll: 5 },
+        setpoint: { roll: 165 },
+      }),
+    ];
+    const flight = buildFlight({
+      samples,
+      events: [{ type: EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, startUs: 0, endUs: 75000 }],
+    });
+
+    const insights = evaluateDiagnosticRules(flight);
+    expect(insights.map((item) => item.id)).toContain("stick-side-command-shaping");
+  });
+
+  it("surfaces RC link quality when debug link quality is weak", () => {
+    const samples = Array.from({ length: 12 }, (_, index) =>
+      buildSample(index * 25000, {
+        debug: {
+          mode: "RX_TIMING",
+          values: [250, 500, 1, 250, 500, 430, 88, 1],
+        },
+      })
+    );
+    const flight = buildFlight({
+      samples,
+      events: [{ type: EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, startUs: 0, endUs: 220000 }],
+    });
+
+    const insights = evaluateDiagnosticRules(flight);
+    expect(insights.map((item) => item.id)).toContain("rc-link-quality");
   });
 });

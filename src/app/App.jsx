@@ -25,9 +25,11 @@ import {
   detectArmedOverlayTime,
 } from "../domain/sync/autoVideoSync.js";
 import { evaluateDiagnosticRules } from "../domain/analysis/diagnosticRules.js";
+import { getStickIntentReviewSummary } from "../domain/analysis/stickIntentReview.js";
 import { getFlightSetupSummary } from "../domain/blackbox/setup/flightSetupSummary.js";
 import { SUPPORTED_LOCALES, translate } from "../i18n/index.js";
 import { SetupSummaryPanel } from "./SetupSummaryPanel.jsx";
+import { StickIntentPanel } from "./StickIntentPanel.jsx";
 
 const OVERLAY_SAMPLE_INTERVAL_US = 25000;
 const DIAGNOSTIC_EVENT_PADDING_US = 300000;
@@ -1460,6 +1462,16 @@ export function App() {
     () => (diagnosticFlight ? evaluateDiagnosticRules(diagnosticFlight, locale) : []),
     [diagnosticFlight, locale]
   );
+  const stickIntentSummary = useMemo(
+    () =>
+      diagnosticFlight
+        ? getStickIntentReviewSummary(
+            diagnosticFlight.window?.samples ?? [],
+            diagnosticFlight.setupSummary
+          )
+        : null,
+    [diagnosticFlight]
+  );
   const stickUsage = useMemo(
     () => (preparedFlight?.window?.samples ? getStickAxisUsage(preparedFlight.window.samples) : null),
     [preparedFlight]
@@ -2328,6 +2340,12 @@ export function App() {
             focusMeta={diagnosticScopeMeta}
             isEventFocused={Boolean(selectedReviewEvent)}
             onClearFocus={() => setSelectedReviewEventId(null)}
+            t={t}
+          />
+          <StickIntentPanel
+            summary={stickIntentSummary}
+            focusLabel={diagnosticScopeLabel}
+            focusMeta={diagnosticScopeMeta}
             t={t}
           />
           <EventList

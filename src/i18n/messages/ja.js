@@ -224,6 +224,9 @@ export const jaMessages = {
     loadedTurnTracking: "Loaded-turn tracking",
     loadedTurnTrackingMeaning:
       "低いほど、荷重のかかったロールターン中の追従誤差が少ないです。",
+    stickShapingGap: "入力側 shaping gap",
+    stickShapingGapMeaning:
+      "低いほど、RC command と setpoint の動きが近く、入力から出力までの nervous さが少ないです。",
   },
   diagnostics: {
     title: "レビュー所見",
@@ -274,6 +277,67 @@ export const jaMessages = {
       "filter だけで説明せず、同じ chop turn を setup 変更前後で見比べてください。",
     dynamicIdleConfigured: "Dynamic Idle 設定: {value}",
     dynamicIdleUnknown: "埋め込み設定から Dynamic Idle 値は見つかりませんでした。",
+    stickSideLabel: "入力側のコマンド整形を要確認",
+    stickSideEvidence:
+      "{axis} で stick-to-setpoint の整形が強めに見えます。RC→SP gap 最大 {rcGap}、動きの差 {deltaGap}、held update {held}%。{smoothing}",
+    stickSideCheck1:
+      "PID / filter を疑う前に、feedforward 量、FF limit、jitter reduction を確認してください。",
+    stickSideCheck2:
+      "RC smoothing が意図した stick move に対して段付きや hold を増やしていないか確認してください。",
+    stickSideCheck3:
+      "同じ直線やアークを、feedforward / RC smoothing 変更前後で見比べてください。",
+    stickSideConfig: "埋め込み RC smoothing: {value}",
+    stickSideNoConfig: "埋め込み設定から RC smoothing の詳細は見つかりませんでした。",
+    rcLinkLabel: "RC link quality を要確認",
+    rcLinkEvidence:
+      "{mode} debug では平均 link quality が {lq}% 前後です。motor 側 tuning を疑う前に RC 経路を確認してください。",
+    rcLinkCheck1:
+      "同じシーンで receiver update の安定性と radio link quality を確認してください。",
+    rcLinkCheck2:
+      "feedforward や filtering を変える前に、raw input / RC command / setpoint の差を見てください。",
+    rcLinkCheck3:
+      "穏やかなクリップでは出ないなら、link や transmitter 側が関与している可能性があります。",
+  },
+  stickReview: {
+    title: "入力側レビュー",
+    description:
+      "PID や filter を疑う前に、RC / setpoint 側で nervous さが始まっていないかを確認します。",
+    empty: "この範囲では十分な RC / setpoint 情報がまだありません。",
+    scope: "対象",
+    primaryAxis: "注目軸",
+    rcSetpointGap: "RC→SP gap",
+    rawCommandGap: "Raw→RC gap",
+    motionGap: "動きの差",
+    heldInput: "Held update",
+    activeSamples: "Active sample",
+    noRaw: "Raw なし",
+    noDebug: "このログには RC / feedforward debug がありません。",
+    configTitle: "埋め込み整形設定",
+    debugTitle: "Debug 補助情報",
+    radioTitle: "Radio",
+    rssi: "RSSI",
+    linkQuality: "Link quality",
+    debugMode: "Debug mode",
+    roll: "Roll",
+    pitch: "Pitch",
+    yaw: "Yaw",
+    debug: {
+      setpointSpeed: "Setpoint speed",
+      rcDelta: "RC delta",
+      jitterAttenuator: "Jitter attenuator",
+      ffSmoothing: "FF smoothing",
+      smoothedRxRateHz: "Smoothed Rx",
+      ffPt1: "FF PT1",
+      outlierCount: "Outlier",
+      validCount: "Valid count",
+      frameRateMs: "Frame rate",
+      updateShare: "Update share",
+      packetIntervalMs: "Packet interval",
+      currentRxRateHz: "Current Rx",
+      linkQuality: "Link quality",
+      radioRssi: "Radio RSSI",
+      snr: "SNR",
+    },
   },
   status: {
     settled: "安定",

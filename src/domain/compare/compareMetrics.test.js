@@ -65,6 +65,7 @@ describe("getCompareSummary", () => {
       "Pitch tracking RMSE",
       "Saturation share",
       "High-throttle tracking",
+      "Stick-side shaping gap",
     ]);
     expect(summary.notes.some((note) => note.includes("Loaded-turn tracking hidden"))).toBe(
       true
