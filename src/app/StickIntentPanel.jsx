@@ -42,7 +42,7 @@ function AxisMetricCard({ axisKey, axisSummary, t }) {
 
 export function StickIntentPanel({ summary, focusLabel, focusMeta, t }) {
   return (
-    <aside className="compare-panel stick-review-panel">
+    <section className="setup-summary stick-review-panel">
       <div className="compare-panel__header">
         <h3>{t("stickReview.title")}</h3>
         <p>{t("stickReview.description")}</p>
@@ -55,34 +55,44 @@ export function StickIntentPanel({ summary, focusLabel, focusMeta, t }) {
         </div>
       </div>
       {summary?.hasAnyData ? (
-        <div className="compare-panel__metrics">
-          <div className="compare-metric compare-metric--context">
+        <div className="stick-review__grid">
+          <div className="compare-metric compare-metric--context stick-review__overview">
             <span>{t("stickReview.primaryAxis")}</span>
             <strong>
               {summary.primaryAxis ? t(`stickReview.${summary.primaryAxis.axis}`) : t("common.na")}
             </strong>
-            <p>
-              {t("stickReview.activeSamples")}:{" "}
-              {summary.primaryAxis?.activeSamples ?? 0}
-            </p>
-            <p>
-              {t("stickReview.rcSetpointGap")}:{" "}
-              {formatMaybe(summary.primaryAxis?.rcSetpointGapPeak, 0) ?? t("common.na")}
-            </p>
-            <p>
-              {t("stickReview.rawCommandGap")}:{" "}
-              {formatMaybe(summary.primaryAxis?.rawCommandGapPeak, 0) ?? t("stickReview.noRaw")}
-            </p>
+            <div className="stick-review__overview-stats">
+              <p>
+                {t("stickReview.activeSamples")}:{" "}
+                {summary.primaryAxis?.activeSamples ?? 0}
+              </p>
+              <p>
+                {t("stickReview.rcSetpointGap")}:{" "}
+                {formatMaybe(summary.primaryAxis?.rcSetpointGapPeak, 0) ?? t("common.na")}
+              </p>
+              <p>
+                {t("stickReview.rawCommandGap")}:{" "}
+                {formatMaybe(summary.primaryAxis?.rawCommandGapPeak, 0) ?? t("stickReview.noRaw")}
+              </p>
+              <p>
+                {t("stickReview.motionGap")}:{" "}
+                {formatMaybe(summary.primaryAxis?.rcSetpointDeltaGapMean, 1) ?? t("common.na")}
+              </p>
+            </div>
           </div>
-          {["roll", "pitch", "yaw"].map((axisKey) => (
-            <AxisMetricCard
-              key={axisKey}
-              axisKey={axisKey}
-              axisSummary={summary.axes?.[axisKey]}
-              t={t}
-            />
-          ))}
-          <div className="compare-metric compare-metric--notes">
+
+          <div className="stick-review__axis-grid">
+            {["roll", "pitch", "yaw"].map((axisKey) => (
+              <AxisMetricCard
+                key={axisKey}
+                axisKey={axisKey}
+                axisSummary={summary.axes?.[axisKey]}
+                t={t}
+              />
+            ))}
+          </div>
+
+          <div className="compare-metric compare-metric--notes stick-review__notes">
             <span>{t("stickReview.configTitle")}</span>
             {summary.configuration.feedforward ? <p>FF: {summary.configuration.feedforward}</p> : null}
             {summary.configuration.rcSmoothing ? <p>{summary.configuration.rcSmoothing}</p> : null}
@@ -91,7 +101,8 @@ export function StickIntentPanel({ summary, focusLabel, focusMeta, t }) {
             ) : null}
             {summary.configuration.ratesType ? <p>{summary.configuration.ratesType}</p> : null}
           </div>
-          <div className="compare-metric compare-metric--notes">
+
+          <div className="compare-metric compare-metric--notes stick-review__notes">
             <span>{t("stickReview.debugTitle")}</span>
             {summary.debug?.mode ? (
               <>
@@ -112,7 +123,8 @@ export function StickIntentPanel({ summary, focusLabel, focusMeta, t }) {
               <p>{t("stickReview.noDebug")}</p>
             )}
           </div>
-          <div className="compare-metric compare-metric--notes">
+
+          <div className="compare-metric compare-metric--notes stick-review__notes">
             <span>{t("stickReview.radioTitle")}</span>
             <p>
               {t("stickReview.rssi")}: {formatMaybe(summary.radio?.rssiAvg, 0) ?? t("common.na")}
@@ -126,6 +138,6 @@ export function StickIntentPanel({ summary, focusLabel, focusMeta, t }) {
       ) : (
         <p className="muted">{t("stickReview.empty")}</p>
       )}
-    </aside>
+    </section>
   );
 }

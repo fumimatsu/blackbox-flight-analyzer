@@ -2327,7 +2327,15 @@ export function App() {
               </label>
             </div>
           </div>
-          <SetupSummaryPanel summary={setupSummary} t={t} />
+          <div className="review-panels">
+            <SetupSummaryPanel summary={setupSummary} t={t} />
+            <StickIntentPanel
+              summary={stickIntentSummary}
+              focusLabel={diagnosticScopeLabel}
+              focusMeta={diagnosticScopeMeta}
+              t={t}
+            />
+          </div>
           {overlayState.historyOpen ? (
             <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} t={t} />
           ) : null}
@@ -2340,12 +2348,6 @@ export function App() {
             focusMeta={diagnosticScopeMeta}
             isEventFocused={Boolean(selectedReviewEvent)}
             onClearFocus={() => setSelectedReviewEventId(null)}
-            t={t}
-          />
-          <StickIntentPanel
-            summary={stickIntentSummary}
-            focusLabel={diagnosticScopeLabel}
-            focusMeta={diagnosticScopeMeta}
             t={t}
           />
           <EventList

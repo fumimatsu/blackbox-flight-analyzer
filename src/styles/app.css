@@ -306,6 +306,8 @@ input {
 .viewer {
   flex: 1 1 auto;
   min-width: 0;
+  display: grid;
+  gap: 14px;
 }
 
 .sidecar {
@@ -1541,6 +1543,13 @@ input {
   border-radius: 22px;
   background: rgba(7, 11, 16, 0.78);
   min-width: 0;
+  padding: 18px 20px;
+}
+
+.review-panels {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
 }
 
 .setup-summary__header,
@@ -1964,20 +1973,49 @@ option:hover {
   word-break: break-word;
 }
 
-.stick-review-panel .compare-panel__metrics {
+.stick-review-panel .compare-panel__header {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.stick-review-panel .compare-panel__header h3 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.stick-review-panel .compare-panel__header p {
+  margin: 0;
+}
+
+.stick-review__grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.05fr) minmax(0, 1.75fr) repeat(2, minmax(180px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.stick-review__overview,
+.stick-review__notes,
+.stick-review__metric {
+  min-width: 0;
+}
+
+.stick-review__overview-stats {
+  display: grid;
+  gap: 4px;
+}
+
+.stick-review__axis-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  min-width: 0;
 }
 
 .stick-review__metric strong,
 .stick-review__metric em {
   display: block;
-}
-
-.stick-review-panel .compare-metric--context,
-.stick-review-panel .compare-metric--notes {
-  grid-column: span 2;
 }
 
 @media (max-width: 1280px) {
@@ -1988,6 +2026,10 @@ option:hover {
   .sidecar {
     width: 100%;
     grid-template-columns: 1fr 1fr;
+  }
+
+  .stick-review__grid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -2001,13 +2043,13 @@ option:hover {
     grid-template-columns: 1fr;
   }
 
-  .stick-review-panel .compare-panel__metrics {
-    grid-template-columns: 1fr;
+  .review-panels {
+    gap: 10px;
   }
 
-  .stick-review-panel .compare-metric--context,
-  .stick-review-panel .compare-metric--notes {
-    grid-column: span 1;
+  .stick-review__grid,
+  .stick-review__axis-grid {
+    grid-template-columns: 1fr;
   }
 
   .overlay--summary {
