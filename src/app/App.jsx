@@ -112,6 +112,167 @@ function mapMaybePoint(xValue, yValue) {
   return { x: xValue, y: yValue };
 }
 
+function getAxisMeta(axisKey, t) {
+  switch (axisKey) {
+    case "roll":
+      return {
+        title: t("overlay.roll"),
+        shortTitle: "Roll",
+        mapValue: (value) => mapStickAxis(value),
+        getValue: (snapshot, source) => snapshot[source].roll,
+        getRawValue: (snapshot) => snapshot.rcRaw.roll,
+        getSetpointValue: (snapshot) => snapshot.setpoint.roll,
+        minValue: -500,
+        maxValue: 500,
+        lineClassName: "stick-history__line stick-history__line--roll",
+        legendClassName: "stick-history__legend-swatch--roll",
+      };
+    case "pitch":
+      return {
+        title: t("overlay.pitch"),
+        shortTitle: "Pitch",
+        mapValue: (value) => mapStickAxis(negateMaybe(value)),
+        getValue: (snapshot, source) => snapshot[source].pitch,
+        getRawValue: (snapshot) => snapshot.rcRaw.pitch,
+        getSetpointValue: (snapshot) => snapshot.setpoint.pitch,
+        minValue: -500,
+        maxValue: 500,
+        lineClassName: "stick-history__line stick-history__line--pitch",
+        legendClassName: "stick-history__legend-swatch--pitch",
+      };
+    case "yaw":
+      return {
+        title: t("overlay.yaw"),
+        shortTitle: "Yaw",
+        mapValue: (value) => mapStickAxis(value),
+        getValue: (snapshot, source) => snapshot[source].yaw,
+        getRawValue: (snapshot) => snapshot.rcRaw.yaw,
+        getSetpointValue: (snapshot) => snapshot.setpoint.yaw,
+        minValue: -500,
+        maxValue: 500,
+        lineClassName: "stick-history__line stick-history__line--yaw",
+        legendClassName: "stick-history__legend-swatch--yaw",
+      };
+    case "throttle":
+    default:
+      return {
+        title: t("overlay.throttle"),
+        shortTitle: t("overlay.throttleShort"),
+        mapValue: (value) => mapThrottleAxis(value),
+        getValue: (snapshot, source) => snapshot[source].throttle,
+        getRawValue: (snapshot) => snapshot.rcRaw.throttle,
+        getSetpointValue: () => null,
+        minValue: 0,
+        maxValue: 100,
+        lineClassName: "stick-history__line stick-history__line--throttle",
+        legendClassName: "stick-history__legend-swatch--throttle",
+      };
+  }
+}
+
+function buildAxisLabel(snapshot, axisMeta) {
+  const rcValue = axisMeta.getValue(snapshot, "rc");
+  if (axisMeta.getSetpointValue(snapshot) !== null) {
+    return `${axisMeta.shortTitle} rc ${formatMaybeValue(rcValue, 0)} / sp ${formatMaybeValue(
+      axisMeta.getSetpointValue(snapshot),
+      0
+    )}`;
+  }
+  return `${axisMeta.shortTitle} rc ${formatMaybeValue(rcValue, 0)} / raw ${formatMaybeValue(
+    axisMeta.getRawValue(snapshot),
+    0,
+    "%"
+  )}`;
+}
+
+function buildStickConfig(snapshot, trailSamples, stickKey, stickMode, t, stickGraphWindow, miniGraphEnabled, currentTimeUs) {
+  const isMode1 = stickMode === "mode1";
+  const axes =
+    stickKey === "left"
+      ? isMode1
+        ? ["yaw", "pitch"]
+        : ["yaw", "throttle"]
+      : isMode1
+        ? ["roll", "throttle"]
+        : ["roll", "pitch"];
+  const [xAxisKey, yAxisKey] = axes;
+  const xAxis = getAxisMeta(xAxisKey, t);
+  const yAxis = getAxisMeta(yAxisKey, t);
+
+  const titleMap = {
+    "yaw-throttle": t("overlay.throttleYaw"),
+    "roll-pitch": t("overlay.rollPitch"),
+    "yaw-pitch": t("overlay.pitchYaw"),
+    "roll-throttle": t("overlay.rollThrottle"),
+  };
+
+  const trail = trailSamples
+    .map((sample) =>
+      mapMaybePoint(
+        xAxis.mapValue(xAxis.getValue(sample, "rc")),
+        yAxis.mapValue(yAxis.getValue(sample, "rc"))
+      )
+    )
+    .filter(Boolean);
+
+  const rawPoint = mapMaybePoint(
+    xAxis.mapValue(xAxis.getRawValue(snapshot)),
+    yAxis.mapValue(yAxis.getRawValue(snapshot))
+  );
+
+  const setpointPoint = mapMaybePoint(
+    xAxis.mapValue(xAxis.getSetpointValue(snapshot) ?? xAxis.getValue(snapshot, "rc")),
+    yAxis.mapValue(yAxis.getSetpointValue(snapshot) ?? yAxis.getValue(snapshot, "rc"))
+  );
+
+  const miniGraph =
+    miniGraphEnabled && stickGraphWindow
+      ? (
+          <StickHistoryMini
+            currentTimeUs={currentTimeUs}
+            channels={[
+              {
+                key: xAxisKey,
+                samples: stickGraphWindow.samples,
+                valueSelector: (sample) => xAxis.getValue(sample, "rc"),
+                minValue: xAxis.minValue,
+                maxValue: xAxis.maxValue,
+                className: xAxis.lineClassName,
+                legendClassName: xAxis.legendClassName,
+                legendLabel: xAxis.shortTitle,
+              },
+              {
+                key: yAxisKey,
+                samples: stickGraphWindow.samples,
+                valueSelector: (sample) => yAxis.getValue(sample, "rc"),
+                minValue: yAxis.minValue,
+                maxValue: yAxis.maxValue,
+                className: yAxis.lineClassName,
+                legendClassName: yAxis.legendClassName,
+                legendLabel: yAxis.shortTitle,
+              },
+            ]}
+            legendLabels={{
+              [xAxisKey]: xAxis.shortTitle,
+              [yAxisKey]: yAxis.shortTitle,
+            }}
+          />
+        )
+      : null;
+
+  return {
+    title: titleMap[`${xAxisKey}-${yAxisKey}`],
+    xValue: xAxis.mapValue(xAxis.getValue(snapshot, "rc")),
+    yValue: yAxis.mapValue(yAxis.getValue(snapshot, "rc")),
+    xLabel: buildAxisLabel(snapshot, xAxis),
+    yLabel: buildAxisLabel(snapshot, yAxis),
+    trail,
+    rawPoint,
+    setpointPoint,
+    miniGraph,
+  };
+}
+
 function getTimeCursorX(currentTimeUs, startUs, endUs, width) {
   if (
     currentTimeUs === null ||
@@ -1015,8 +1176,10 @@ export function App() {
   const [syncNoticeVisible, setSyncNoticeVisible] = useState(false);
   const flights = useAppStore((state) => state.flights);
   const locale = useAppStore((state) => state.locale);
+  const stickMode = useAppStore((state) => state.stickMode);
   const selectedFlight = useSelectedFlight();
   const setLocale = useAppStore((state) => state.setLocale);
+  const setStickMode = useAppStore((state) => state.setStickMode);
   const t = (key, params) => translate(locale, key, params);
   const preparedFlight = useMemo(() => prepareFlight(selectedFlight, locale), [selectedFlight, locale]);
   const compareSession = useAppStore((state) => state.compareSession);
@@ -1056,28 +1219,15 @@ export function App() {
     [preparedFlight, locale]
   );
 
-  const stickTrail = useMemo(() => {
+  const trailSamples = useMemo(() => {
     if (!preparedFlight || !snapshot) {
-      return { left: [], right: [] };
+      return [];
     }
     const startUs = Math.max(currentTimeUs - 1000000, preparedFlight.minTimeUs);
     const trailWindow = getFlightWindow(preparedFlight, startUs, currentTimeUs, 120);
-    const trailSamples = trailWindow.samples
+    return trailWindow.samples
       .filter((sample) => sample.timeUs < currentTimeUs)
       .slice(-32);
-
-    return {
-      left: trailSamples
-        .map((sample) =>
-          mapMaybePoint(mapStickAxis(sample.rc.yaw), mapThrottleAxis(sample.rc.throttle))
-        )
-        .filter(Boolean),
-      right: trailSamples
-        .map((sample) =>
-          mapMaybePoint(mapStickAxis(sample.rc.roll), mapStickAxis(negateMaybe(sample.rc.pitch)))
-        )
-        .filter(Boolean),
-    };
   }, [preparedFlight, snapshot, currentTimeUs]);
 
   const stickGraphWindow = useMemo(() => {
@@ -1118,6 +1268,54 @@ export function App() {
       }
     );
   }, [preparedFlight, currentTimeUs]);
+
+  const leftStickConfig = useMemo(() => {
+    if (!snapshot) {
+      return null;
+    }
+    return buildStickConfig(
+      snapshot,
+      trailSamples,
+      "left",
+      stickMode,
+      t,
+      stickGraphWindow,
+      overlayState.stickMiniGraphEnabled,
+      currentTimeUs
+    );
+  }, [
+    snapshot,
+    trailSamples,
+    stickMode,
+    stickGraphWindow,
+    overlayState.stickMiniGraphEnabled,
+    currentTimeUs,
+    t,
+  ]);
+
+  const rightStickConfig = useMemo(() => {
+    if (!snapshot) {
+      return null;
+    }
+    return buildStickConfig(
+      snapshot,
+      trailSamples,
+      "right",
+      stickMode,
+      t,
+      stickGraphWindow,
+      overlayState.stickMiniGraphEnabled,
+      currentTimeUs
+    );
+  }, [
+    snapshot,
+    trailSamples,
+    stickMode,
+    stickGraphWindow,
+    overlayState.stickMiniGraphEnabled,
+    currentTimeUs,
+    t,
+  ]);
 
   async function runAutoSyncArmed(session = preparedFlight) {
     if (!session?.video || firstArmedTimeUs === null) {
@@ -1535,6 +1733,17 @@ export function App() {
           >
             {t("app.stickGraphs")} {overlayState.stickMiniGraphEnabled ? t("common.on") : t("common.off")}
           </button>
+          <label className="rate-select-wrap">
+            <span className="rate-slider__label">{t("app.stickMode")}</span>
+            <select
+              className="rate-select"
+              value={stickMode}
+              onChange={(event) => setStickMode(event.target.value)}
+            >
+              <option value="mode1">{t("app.mode1")}</option>
+              <option value="mode2">{t("app.mode2")}</option>
+            </select>
+          </label>
           <select
             className="rate-select"
             value={overlayState.stickMiniGraphWindowUs}
@@ -1713,128 +1922,28 @@ export function App() {
                 {overlayState.stickOverlayVisible ? (
                   <>
                     <div className="overlay overlay--sticks overlay--sticks-left">
-                      <StickOverlay
-                        title={t("overlay.throttleYaw")}
-                        xValue={mapStickAxis(snapshot.rc.yaw)}
-                        yValue={mapThrottleAxis(snapshot.rc.throttle)}
-                        xLabel={`Yaw rc ${formatMaybeValue(snapshot.rc.yaw, 0)} / sp ${formatMaybeValue(snapshot.setpoint.yaw, 0)}`}
-                        yLabel={`Thr rc ${formatMaybeValue(snapshot.rc.throttle, 0)} / raw ${formatMaybeValue(snapshot.rcRaw.throttle, 0, "%")}`}
-                        trail={stickTrail.left}
-                        legendLabels={{
-                          rc: t("overlay.rc"),
-                          raw: t("overlay.raw"),
-                          setpoint: t("overlay.setpoint"),
-                        }}
-                        rawPoint={
-                          snapshot.rcRaw.yaw !== null && snapshot.rcRaw.throttle !== null
-                            ? {
-                                x: mapStickAxis(snapshot.rcRaw.yaw),
-                                y: mapThrottleAxis(snapshot.rcRaw.throttle),
-                              }
-                            : null
-                        }
-                        setpointPoint={mapMaybePoint(
-                          mapStickAxis(snapshot.setpoint.yaw),
-                          mapThrottleAxis(snapshot.rc.throttle)
-                        )}
-                        miniGraph={
-                          overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
-                            <StickHistoryMini
-                              currentTimeUs={currentTimeUs}
-                              channels={[
-                                {
-                                  key: "throttle",
-                                  samples: stickGraphWindow.samples,
-                                  valueSelector: (sample) => sample.rc.throttle,
-                                  minValue: 0,
-                                  maxValue: 100,
-                                  className:
-                                    "stick-history__line stick-history__line--throttle",
-                                  legendClassName:
-                                    "stick-history__legend-swatch--throttle",
-                                  legendLabel: "Thr",
-                                },
-                                {
-                                  key: "yaw",
-                                  samples: stickGraphWindow.samples,
-                                  valueSelector: (sample) => sample.rc.yaw,
-                                  minValue: -500,
-                                  maxValue: 500,
-                                  className: "stick-history__line stick-history__line--yaw",
-                                  legendClassName: "stick-history__legend-swatch--yaw",
-                                  legendLabel: "Yaw",
-                                },
-                              ]}
-                              legendLabels={{
-                                throttle: "Thr",
-                                yaw: "Yaw",
-                              }}
-                            />
-                          ) : null
-                        }
-                      />
+                      {leftStickConfig ? (
+                        <StickOverlay
+                          {...leftStickConfig}
+                          legendLabels={{
+                            rc: t("overlay.rc"),
+                            raw: t("overlay.raw"),
+                            setpoint: t("overlay.setpoint"),
+                          }}
+                        />
+                      ) : null}
                     </div>
                     <div className="overlay overlay--sticks overlay--sticks-right">
-                      <StickOverlay
-                        title={t("overlay.rollPitch")}
-                        xValue={mapStickAxis(snapshot.rc.roll)}
-                        yValue={mapStickAxis(negateMaybe(snapshot.rc.pitch))}
-                        xLabel={`Roll rc ${formatMaybeValue(snapshot.rc.roll, 0)} / sp ${formatMaybeValue(snapshot.setpoint.roll, 0)}`}
-                        yLabel={`Pitch rc ${formatMaybeValue(snapshot.rc.pitch, 0)} / sp ${formatMaybeValue(snapshot.setpoint.pitch, 0)}`}
-                        trail={stickTrail.right}
-                        legendLabels={{
-                          rc: t("overlay.rc"),
-                          raw: t("overlay.raw"),
-                          setpoint: t("overlay.setpoint"),
-                        }}
-                        rawPoint={
-                          snapshot.rcRaw.roll !== null && snapshot.rcRaw.pitch !== null
-                            ? {
-                                x: mapStickAxis(snapshot.rcRaw.roll),
-                                y: mapStickAxis(negateMaybe(snapshot.rcRaw.pitch)),
-                              }
-                            : null
-                        }
-                        setpointPoint={mapMaybePoint(
-                          mapStickAxis(snapshot.setpoint.roll),
-                          mapStickAxis(negateMaybe(snapshot.setpoint.pitch))
-                        )}
-                        miniGraph={
-                          overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
-                            <StickHistoryMini
-                              currentTimeUs={currentTimeUs}
-                              channels={[
-                                {
-                                  key: "roll",
-                                  samples: stickGraphWindow.samples,
-                                  valueSelector: (sample) => sample.rc.roll,
-                                  minValue: -500,
-                                  maxValue: 500,
-                                  className:
-                                    "stick-history__line stick-history__line--roll",
-                                  legendClassName: "stick-history__legend-swatch--roll",
-                                  legendLabel: "Roll",
-                                },
-                                {
-                                  key: "pitch",
-                                  samples: stickGraphWindow.samples,
-                                  valueSelector: (sample) => sample.rc.pitch,
-                                  minValue: -500,
-                                  maxValue: 500,
-                                  className:
-                                    "stick-history__line stick-history__line--pitch",
-                                  legendClassName: "stick-history__legend-swatch--pitch",
-                                  legendLabel: "Pitch",
-                                },
-                              ]}
-                              legendLabels={{
-                                roll: "Roll",
-                                pitch: "Pitch",
-                              }}
-                            />
-                          ) : null
-                        }
-                      />
+                      {rightStickConfig ? (
+                        <StickOverlay
+                          {...rightStickConfig}
+                          legendLabels={{
+                            rc: t("overlay.rc"),
+                            raw: t("overlay.raw"),
+                            setpoint: t("overlay.setpoint"),
+                          }}
+                        />
+                      ) : null}
                     </div>
                   </>
                 ) : null}

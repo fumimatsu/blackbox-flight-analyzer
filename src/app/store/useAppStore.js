@@ -9,6 +9,7 @@ export const useAppStore = create((set) => ({
   currentTimeUs: 0,
   visibleWindowUs: DEFAULT_WINDOW_US,
   locale: detectInitialLocale(),
+  stickMode: "mode2",
   playback: {
     isPlaying: false,
     rate: 1,
@@ -83,6 +84,9 @@ export const useAppStore = create((set) => ({
   },
   setLocale(locale) {
     set({ locale });
+  },
+  setStickMode(stickMode) {
+    set({ stickMode });
   },
   setPlayback(isPlaying) {
     set((state) => ({ playback: { ...state.playback, isPlaying } }));
