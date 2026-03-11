@@ -22,6 +22,7 @@ import {
   calculateAutoVideoOffset,
   detectArmedOverlayTime,
 } from "../domain/sync/autoVideoSync.js";
+import { evaluateDiagnosticRules } from "../domain/analysis/diagnosticRules.js";
 
 const OVERLAY_SAMPLE_INTERVAL_US = 25000;
 const MIN_PLAYBACK_RATE = 0.25;
@@ -977,6 +978,50 @@ function ComparePanel({ flights, compareSession, onFlightChange, onEventTypeChan
   );
 }
 
+function DiagnosticPanel({ insights }) {
+  return (
+    <aside className="compare-panel diagnostic-panel">
+      <div className="compare-panel__header">
+        <h3>Review Insights</h3>
+        <p>Rule-based, cautious guidance grounded in Betaflight official tuning notes.</p>
+      </div>
+      {insights.length ? (
+        <div className="compare-panel__metrics">
+          {insights.map((insight) => (
+            <div key={insight.id} className="compare-metric diagnostic-card">
+              <span>Likely related to</span>
+              <strong>{insight.label}</strong>
+              <em>Confidence: {insight.confidence}</em>
+              <p>{insight.evidenceSummary}</p>
+              <div className="diagnostic-card__section">
+                <span>Check next</span>
+                {insight.likelyChecks.map((item) => (
+                  <p key={item}>{item}</p>
+                ))}
+              </div>
+              <div className="diagnostic-card__section">
+                <span>Official basis</span>
+                {insight.officialSources.map((source) => (
+                  <p key={source}>
+                    <a href={source} target="_blank" rel="noreferrer">
+                      {source}
+                    </a>
+                  </p>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p className="muted">
+          No diagnostic rule matched strongly enough yet. That is expected on calmer or
+          inconclusive sections.
+        </p>
+      )}
+    </aside>
+  );
+}
+
 export function App() {
   const videoRef = useRef(null);
   const playbackFrameRef = useRef(0);
@@ -1020,6 +1065,10 @@ export function App() {
   }, [preparedFlight, currentTimeUs]);
 
   const overlaySummary = snapshot ? getFlightStatusSummary(snapshot) : null;
+  const diagnosticInsights = useMemo(
+    () => (preparedFlight ? evaluateDiagnosticRules(preparedFlight) : []),
+    [preparedFlight]
+  );
 
   const stickTrail = useMemo(() => {
     if (!preparedFlight || !snapshot) {
@@ -1817,6 +1866,7 @@ export function App() {
         </section>
 
         <section className="sidecar">
+          <DiagnosticPanel insights={diagnosticInsights} />
           <EventList events={preparedFlight.events} onSelect={setCurrentTimeUs} />
           {overlayState.compareOpen ? (
             <ComparePanel

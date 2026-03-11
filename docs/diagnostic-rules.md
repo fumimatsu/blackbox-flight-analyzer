@@ -163,20 +163,20 @@ Avoid wording like:
 
 ## Next implementation step
 
-Before showing diagnostic commentary in the UI, add a small machine-readable rule shape such as:
+The app-facing rule shape is now implemented around:
 
 ```text
 id
 label
 eventTypes[]
-predicate(snapshot/window/event)
+predicate(flightEvidence)
 evidenceSummary()
 likelyChecks[]
 confidence
 officialSources[]
 ```
 
-That keeps future insight cards traceable to evidence and to official Betaflight references.
+This keeps insight cards traceable to both observed evidence and official Betaflight references.
 
 ## Official sources used for this draft
 
