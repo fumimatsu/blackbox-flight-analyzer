@@ -969,9 +969,15 @@ input {
   fill: rgba(255, 255, 255, 0.03);
 }
 
+.stick-history__cursor-glow {
+  stroke: rgba(164, 255, 224, 0.16);
+  stroke-width: 4;
+}
+
 .stick-history__cursor {
-  stroke: rgba(255, 255, 255, 0.25);
-  stroke-width: 1;
+  stroke: rgba(214, 255, 241, 0.92);
+  stroke-width: 1.4;
+  stroke-dasharray: 0;
 }
 
 .stick-history__line {
@@ -982,19 +988,19 @@ input {
 }
 
 .stick-history__line--throttle {
-  stroke: var(--throttle);
+  stroke: #f6d365;
 }
 
 .stick-history__line--yaw {
-  stroke: var(--accent);
+  stroke: #ff9f6e;
 }
 
 .stick-history__line--roll {
-  stroke: var(--roll);
+  stroke: #ff7aa2;
 }
 
 .stick-history__line--pitch {
-  stroke: var(--pitch);
+  stroke: #67d7ff;
 }
 
 .stick-history__legend {
@@ -1020,19 +1026,19 @@ input {
 }
 
 .stick-history__legend-swatch--throttle {
-  background: var(--throttle);
+  background: #f6d365;
 }
 
 .stick-history__legend-swatch--yaw {
-  background: var(--accent);
+  background: #ff9f6e;
 }
 
 .stick-history__legend-swatch--roll {
-  background: var(--roll);
+  background: #ff7aa2;
 }
 
 .stick-history__legend-swatch--pitch {
-  background: var(--pitch);
+  background: #67d7ff;
 }
 
 .motor-detail {

@@ -687,6 +687,13 @@ function StickHistoryMini({
           x2={cursorX}
           y1="0"
           y2={height}
+          className="stick-history__cursor-glow"
+        />
+        <line
+          x1={cursorX}
+          x2={cursorX}
+          y1="0"
+          y2={height}
           className="stick-history__cursor"
         />
         {channels.map((channel) => (
