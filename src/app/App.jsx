@@ -1048,6 +1048,18 @@ export function App() {
         return;
       }
 
+      if (detected.accepted === false) {
+        setVideoSyncMeta(session.id, {
+          detectionStatus: "failed",
+          confidence: detected.confidence,
+          armedVideoTimeSeconds: detected.timeSeconds,
+          detectionMessage: `Rejected low-confidence ARMED candidate at ${detected.timeSeconds.toFixed(
+            2
+          )}s (OCR ${detected.confidence.toFixed(0)}%). Adjust offset manually.`,
+        });
+        return;
+      }
+
       const offsetSeconds = calculateAutoVideoOffset(
         firstArmedTimeUs,
         detected.timeSeconds,

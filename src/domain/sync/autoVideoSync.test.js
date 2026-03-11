@@ -1,5 +1,31 @@
 import { describe, expect, it } from "vitest";
-import { calculateAutoVideoOffset } from "./autoVideoSync.js";
+import { calculateAutoVideoOffset, classifyDetectionResult } from "./autoVideoSync.js";
+
+describe("classifyDetectionResult", () => {
+  it("rejects low-confidence candidates so offsets are not auto-applied", async () => {
+    const classified = classifyDetectionResult({
+      timeSeconds: 1.3,
+      confidence: 21,
+      score: 100,
+      text: "ARMED",
+    });
+
+    expect(classified.accepted).toBe(false);
+    expect(classified.rejectionReason).toBe("low-confidence");
+  });
+
+  it("accepts high-confidence detections", () => {
+    const classified = classifyDetectionResult({
+      timeSeconds: 2.75,
+      confidence: 96,
+      score: 196,
+      text: "ARMED",
+    });
+
+    expect(classified.accepted).toBe(true);
+    expect(classified.rejectionReason).toBeNull();
+  });
+});
 
 describe("calculateAutoVideoOffset", () => {
   it("converts log arm time into a DVR offset relative to log start", () => {

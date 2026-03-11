@@ -12,6 +12,9 @@ const templateCache = new Map();
 const NORMALIZED_WIDTH = 320;
 const NORMALIZED_HEIGHT = 120;
 const MIN_LIT_PIXELS = 40;
+const MIN_ACCEPTED_SCORE = 35;
+const MIN_ACCEPTED_CONFIDENCE = 55;
+const MIN_ACCEPTED_TEXT_SCORE = 120;
 
 function createAbortError() {
   return new DOMException("Auto sync was cancelled.", "AbortError");
@@ -362,6 +365,34 @@ async function recognizeArmed(canvas) {
   };
 }
 
+export function classifyDetectionResult(best) {
+  if (best.timeSeconds === null || best.score < MIN_ACCEPTED_SCORE) {
+    return null;
+  }
+
+  if (best.confidence >= MIN_ACCEPTED_CONFIDENCE) {
+    return {
+      ...best,
+      accepted: true,
+      rejectionReason: null,
+    };
+  }
+
+  if (best.score >= MIN_ACCEPTED_TEXT_SCORE) {
+    return {
+      ...best,
+      accepted: true,
+      rejectionReason: null,
+    };
+  }
+
+  return {
+    ...best,
+    accepted: false,
+    rejectionReason: "low-confidence",
+  };
+}
+
 export async function detectArmedOverlayTime(videoUrl, options = {}) {
   const maxScanSeconds = options.maxScanSeconds ?? 10;
   const coarseStep = options.coarseStepSeconds ?? 0.25;
@@ -449,11 +480,7 @@ export async function detectArmedOverlayTime(videoUrl, options = {}) {
     }
   }
 
-  if (best.score < 35) {
-    return null;
-  }
-
-  return best;
+  return classifyDetectionResult(best);
 }
 
 export function calculateAutoVideoOffset(
