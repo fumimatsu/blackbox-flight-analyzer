@@ -54,6 +54,12 @@ This project does not aim to repackage an existing Blackbox viewer UI. The reusa
 - `src/vendor/log-core`: isolated log parsing/runtime modules used behind the adapter layer
 - `docs`: migration and architecture notes
 
+## Diagnostics direction
+
+Rule-based tuning guidance is planned, but it should be grounded in official Betaflight references instead of ad-hoc guesses.
+
+- Draft notes: `docs/diagnostic-rules.md`
+
 ## Notes
 
 - This repo is the standalone continuation of the React-first MVP.
