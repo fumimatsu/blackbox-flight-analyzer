@@ -43,7 +43,6 @@ input {
 .empty-state {
   min-height: 100vh;
   padding: 24px;
-  overflow-x: clip;
 }
 
 .empty-state {
@@ -263,7 +262,7 @@ input {
 
 .workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
   align-items: flex-start;
   min-width: 0;
 }
@@ -282,6 +281,13 @@ input {
   min-width: 0;
   display: grid;
   gap: 16px;
+}
+
+.compare-panel,
+.event-list,
+.history,
+.timeline {
+  min-width: 0;
 }
 
 .viewer__stage {
@@ -1497,7 +1503,7 @@ option:hover {
   text-decoration: underline;
 }
 
-@media (max-width: 1100px) {
+@media (max-width: 1280px) {
   .workspace {
     grid-template-columns: 1fr;
   }
