@@ -21,6 +21,11 @@ export const useAppStore = create((set) => ({
   overlayState: {
     compareOpen: true,
     historyOpen: true,
+    topBarVisible: true,
+    summaryVisible: true,
+    attitudeVisible: true,
+    stickOverlayVisible: true,
+    bottomMetricsVisible: true,
     stickMiniGraphEnabled: true,
     stickMiniGraphWindowUs: 1000000,
   },
@@ -139,6 +144,28 @@ export const useAppStore = create((set) => ({
       overlayState: {
         ...state.overlayState,
         stickMiniGraphWindowUs,
+      },
+    }));
+  },
+  setOverlayVisibility(key, value) {
+    set((state) => ({
+      overlayState: {
+        ...state.overlayState,
+        [key]: value,
+      },
+    }));
+  },
+  resetOverlayVisibility() {
+    set((state) => ({
+      overlayState: {
+        ...state.overlayState,
+        compareOpen: true,
+        historyOpen: true,
+        topBarVisible: true,
+        summaryVisible: true,
+        attitudeVisible: true,
+        stickOverlayVisible: true,
+        bottomMetricsVisible: true,
       },
     }));
   },

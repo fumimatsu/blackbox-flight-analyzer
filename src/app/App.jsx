@@ -229,6 +229,19 @@ function StatusPill({ label, value, accent = "neutral", compact = false }) {
   );
 }
 
+function OverlayToggleButton({ active, label, onClick }) {
+  return (
+    <button
+      className={`transport transport--toggle ${active ? "" : "transport--muted"}`}
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+    >
+      {label} {active ? "On" : "Off"}
+    </button>
+  );
+}
+
 function normalizeHeadingDegrees(value) {
   if (value === null || value === undefined || Number.isNaN(value)) {
     return null;
@@ -947,6 +960,8 @@ export function App() {
   const setStickMiniGraphWindowUs = useAppStore(
     (state) => state.setStickMiniGraphWindowUs
   );
+  const setOverlayVisibility = useAppStore((state) => state.setOverlayVisibility);
+  const resetOverlayVisibility = useAppStore((state) => state.resetOverlayVisibility);
 
   const snapshot = useMemo(() => {
     if (!preparedFlight) {
@@ -1344,6 +1359,15 @@ export function App() {
     syncNoticeVisible &&
     preparedFlight.video &&
     ["running", "done", "failed", "cancelled"].includes(sync.detectionStatus ?? "");
+  const overlayControls = [
+    { key: "topBarVisible", label: "Top" },
+    { key: "summaryVisible", label: "Summary" },
+    { key: "attitudeVisible", label: "Attitude" },
+    { key: "stickOverlayVisible", label: "Sticks" },
+    { key: "bottomMetricsVisible", label: "Bottom" },
+    { key: "historyOpen", label: "History" },
+    { key: "compareOpen", label: "Compare" },
+  ];
 
   return (
     <div className="shell">
@@ -1427,6 +1451,22 @@ export function App() {
             {error}
           </p>
         ))}
+        <div className="toolbar toolbar--secondary">
+          <span className="toolbar__label">View</span>
+          {overlayControls.map((control) => (
+            <OverlayToggleButton
+              key={control.key}
+              label={control.label}
+              active={overlayState[control.key]}
+              onClick={() =>
+                setOverlayVisibility(control.key, !overlayState[control.key])
+              }
+            />
+          ))}
+          <button className="transport transport--ghost" type="button" onClick={resetOverlayVisibility}>
+            Reset view
+          </button>
+        </div>
       </header>
 
       <section className="flight-strip">
@@ -1516,156 +1556,168 @@ export function App() {
             ) : null}
             {snapshot ? (
               <>
-                <div className="overlay overlay--top">
-                  <StatusPill
-                    label="ARM"
-                    value={snapshot.mode.armed ? "Armed" : "Disarmed"}
-                    accent={snapshot.mode.armed ? "good" : "warning"}
-                    compact
-                  />
-                  <StatusPill
-                    label="Mode"
-                    value={snapshot.mode.names.slice(0, 3).join(", ") || "Acro"}
-                    compact
-                  />
-                  <StatusPill label="Throttle" value={overlaySummary.throttleBand} compact />
-                  <StatusPill label="Offset" value={`${(sync.offsetSeconds ?? 0).toFixed(2)}s`} compact />
-                </div>
-                <div className="overlay overlay--summary">
-                  <StatusTimelineCard
-                    snapshot={snapshot}
-                    samples={metricsWindow?.samples ?? []}
-                    currentTimeUs={currentTimeUs}
-                  />
-                  <ErrorTrendCard
-                    snapshot={snapshot}
-                    samples={metricsWindow?.samples ?? []}
-                    currentTimeUs={currentTimeUs}
-                  />
-                </div>
-                <div className="overlay overlay--attitude">
-                  <AttitudeIndicator attitude={snapshot.attitude} />
-                </div>
-                <div className="overlay overlay--sticks overlay--sticks-left">
-                  <StickOverlay
-                    title="Throttle / Yaw"
-                    xValue={mapStickAxis(snapshot.rc.yaw)}
-                    yValue={mapThrottleAxis(snapshot.rc.throttle)}
-                    xLabel={`Yaw rc ${formatMaybeValue(snapshot.rc.yaw, 0)} / sp ${formatMaybeValue(snapshot.setpoint.yaw, 0)}`}
-                    yLabel={`Thr rc ${formatMaybeValue(snapshot.rc.throttle, 0)} / raw ${formatMaybeValue(snapshot.rcRaw.throttle, 0, "%")}`}
-                    trail={stickTrail.left}
-                    rawPoint={
-                      snapshot.rcRaw.yaw !== null && snapshot.rcRaw.throttle !== null
-                        ? {
-                            x: mapStickAxis(snapshot.rcRaw.yaw),
-                            y: mapThrottleAxis(snapshot.rcRaw.throttle),
-                          }
-                        : null
-                    }
-                    setpointPoint={mapMaybePoint(
-                      mapStickAxis(snapshot.setpoint.yaw),
-                      mapThrottleAxis(snapshot.rc.throttle)
-                    )}
-                    miniGraph={
-                      overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
-                        <StickHistoryMini
-                          currentTimeUs={currentTimeUs}
-                          channels={[
-                            {
-                              key: "throttle",
-                              samples: stickGraphWindow.samples,
-                              valueSelector: (sample) => sample.rc.throttle,
-                              minValue: 0,
-                              maxValue: 100,
-                              className:
-                                "stick-history__line stick-history__line--throttle",
-                              legendClassName:
-                                "stick-history__legend-swatch--throttle",
-                              legendLabel: "Thr",
-                            },
-                            {
-                              key: "yaw",
-                              samples: stickGraphWindow.samples,
-                              valueSelector: (sample) => sample.rc.yaw,
-                              minValue: -500,
-                              maxValue: 500,
-                              className: "stick-history__line stick-history__line--yaw",
-                              legendClassName: "stick-history__legend-swatch--yaw",
-                              legendLabel: "Yaw",
-                            },
-                          ]}
-                        />
-                      ) : null
-                    }
-                  />
-                </div>
-                <div className="overlay overlay--sticks overlay--sticks-right">
-                  <StickOverlay
-                    title="Roll / Pitch"
-                    xValue={mapStickAxis(snapshot.rc.roll)}
-                    yValue={mapStickAxis(negateMaybe(snapshot.rc.pitch))}
-                    xLabel={`Roll rc ${formatMaybeValue(snapshot.rc.roll, 0)} / sp ${formatMaybeValue(snapshot.setpoint.roll, 0)}`}
-                    yLabel={`Pitch rc ${formatMaybeValue(snapshot.rc.pitch, 0)} / sp ${formatMaybeValue(snapshot.setpoint.pitch, 0)}`}
-                    trail={stickTrail.right}
-                    rawPoint={
-                      snapshot.rcRaw.roll !== null && snapshot.rcRaw.pitch !== null
-                        ? {
-                            x: mapStickAxis(snapshot.rcRaw.roll),
-                            y: mapStickAxis(negateMaybe(snapshot.rcRaw.pitch)),
-                          }
-                        : null
-                    }
-                    setpointPoint={mapMaybePoint(
-                      mapStickAxis(snapshot.setpoint.roll),
-                      mapStickAxis(negateMaybe(snapshot.setpoint.pitch))
-                    )}
-                    miniGraph={
-                      overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
-                        <StickHistoryMini
-                          currentTimeUs={currentTimeUs}
-                          channels={[
-                            {
-                              key: "roll",
-                              samples: stickGraphWindow.samples,
-                              valueSelector: (sample) => sample.rc.roll,
-                              minValue: -500,
-                              maxValue: 500,
-                              className:
-                                "stick-history__line stick-history__line--roll",
-                              legendClassName: "stick-history__legend-swatch--roll",
-                              legendLabel: "Roll",
-                            },
-                            {
-                              key: "pitch",
-                              samples: stickGraphWindow.samples,
-                              valueSelector: (sample) => sample.rc.pitch,
-                              minValue: -500,
-                              maxValue: 500,
-                              className:
-                                "stick-history__line stick-history__line--pitch",
-                              legendClassName: "stick-history__legend-swatch--pitch",
-                              legendLabel: "Pitch",
-                            },
-                          ]}
-                        />
-                      ) : null
-                    }
-                  />
-                </div>
-                <div className="overlay overlay--bottom">
-                  <MotorDetailCard
-                    motors={snapshot.motors}
-                    spread={motorStats?.spread}
-                    saturation={overlaySummary.saturation}
-                  />
-                  {snapshot.aux.slice(0, 3).map((aux) => (
+                {overlayState.topBarVisible ? (
+                  <div className="overlay overlay--top">
                     <StatusPill
-                      key={aux.label}
-                      label={aux.label}
-                      value={aux.active === null ? "n/a" : aux.active ? "High" : "Low"}
+                      label="ARM"
+                      value={snapshot.mode.armed ? "Armed" : "Disarmed"}
+                      accent={snapshot.mode.armed ? "good" : "warning"}
+                      compact
                     />
-                  ))}
-                </div>
+                    <StatusPill
+                      label="Mode"
+                      value={snapshot.mode.names.slice(0, 3).join(", ") || "Acro"}
+                      compact
+                    />
+                    <StatusPill label="Throttle" value={overlaySummary.throttleBand} compact />
+                    <StatusPill label="Offset" value={`${(sync.offsetSeconds ?? 0).toFixed(2)}s`} compact />
+                  </div>
+                ) : null}
+                {overlayState.summaryVisible ? (
+                  <div className="overlay overlay--summary">
+                    <StatusTimelineCard
+                      snapshot={snapshot}
+                      samples={metricsWindow?.samples ?? []}
+                      currentTimeUs={currentTimeUs}
+                    />
+                    <ErrorTrendCard
+                      snapshot={snapshot}
+                      samples={metricsWindow?.samples ?? []}
+                      currentTimeUs={currentTimeUs}
+                    />
+                  </div>
+                ) : null}
+                {overlayState.attitudeVisible ? (
+                  <div className="overlay overlay--attitude">
+                    <AttitudeIndicator attitude={snapshot.attitude} />
+                  </div>
+                ) : null}
+                {overlayState.stickOverlayVisible ? (
+                  <>
+                    <div className="overlay overlay--sticks overlay--sticks-left">
+                      <StickOverlay
+                        title="Throttle / Yaw"
+                        xValue={mapStickAxis(snapshot.rc.yaw)}
+                        yValue={mapThrottleAxis(snapshot.rc.throttle)}
+                        xLabel={`Yaw rc ${formatMaybeValue(snapshot.rc.yaw, 0)} / sp ${formatMaybeValue(snapshot.setpoint.yaw, 0)}`}
+                        yLabel={`Thr rc ${formatMaybeValue(snapshot.rc.throttle, 0)} / raw ${formatMaybeValue(snapshot.rcRaw.throttle, 0, "%")}`}
+                        trail={stickTrail.left}
+                        rawPoint={
+                          snapshot.rcRaw.yaw !== null && snapshot.rcRaw.throttle !== null
+                            ? {
+                                x: mapStickAxis(snapshot.rcRaw.yaw),
+                                y: mapThrottleAxis(snapshot.rcRaw.throttle),
+                              }
+                            : null
+                        }
+                        setpointPoint={mapMaybePoint(
+                          mapStickAxis(snapshot.setpoint.yaw),
+                          mapThrottleAxis(snapshot.rc.throttle)
+                        )}
+                        miniGraph={
+                          overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
+                            <StickHistoryMini
+                              currentTimeUs={currentTimeUs}
+                              channels={[
+                                {
+                                  key: "throttle",
+                                  samples: stickGraphWindow.samples,
+                                  valueSelector: (sample) => sample.rc.throttle,
+                                  minValue: 0,
+                                  maxValue: 100,
+                                  className:
+                                    "stick-history__line stick-history__line--throttle",
+                                  legendClassName:
+                                    "stick-history__legend-swatch--throttle",
+                                  legendLabel: "Thr",
+                                },
+                                {
+                                  key: "yaw",
+                                  samples: stickGraphWindow.samples,
+                                  valueSelector: (sample) => sample.rc.yaw,
+                                  minValue: -500,
+                                  maxValue: 500,
+                                  className: "stick-history__line stick-history__line--yaw",
+                                  legendClassName: "stick-history__legend-swatch--yaw",
+                                  legendLabel: "Yaw",
+                                },
+                              ]}
+                            />
+                          ) : null
+                        }
+                      />
+                    </div>
+                    <div className="overlay overlay--sticks overlay--sticks-right">
+                      <StickOverlay
+                        title="Roll / Pitch"
+                        xValue={mapStickAxis(snapshot.rc.roll)}
+                        yValue={mapStickAxis(negateMaybe(snapshot.rc.pitch))}
+                        xLabel={`Roll rc ${formatMaybeValue(snapshot.rc.roll, 0)} / sp ${formatMaybeValue(snapshot.setpoint.roll, 0)}`}
+                        yLabel={`Pitch rc ${formatMaybeValue(snapshot.rc.pitch, 0)} / sp ${formatMaybeValue(snapshot.setpoint.pitch, 0)}`}
+                        trail={stickTrail.right}
+                        rawPoint={
+                          snapshot.rcRaw.roll !== null && snapshot.rcRaw.pitch !== null
+                            ? {
+                                x: mapStickAxis(snapshot.rcRaw.roll),
+                                y: mapStickAxis(negateMaybe(snapshot.rcRaw.pitch)),
+                              }
+                            : null
+                        }
+                        setpointPoint={mapMaybePoint(
+                          mapStickAxis(snapshot.setpoint.roll),
+                          mapStickAxis(negateMaybe(snapshot.setpoint.pitch))
+                        )}
+                        miniGraph={
+                          overlayState.stickMiniGraphEnabled && stickGraphWindow ? (
+                            <StickHistoryMini
+                              currentTimeUs={currentTimeUs}
+                              channels={[
+                                {
+                                  key: "roll",
+                                  samples: stickGraphWindow.samples,
+                                  valueSelector: (sample) => sample.rc.roll,
+                                  minValue: -500,
+                                  maxValue: 500,
+                                  className:
+                                    "stick-history__line stick-history__line--roll",
+                                  legendClassName: "stick-history__legend-swatch--roll",
+                                  legendLabel: "Roll",
+                                },
+                                {
+                                  key: "pitch",
+                                  samples: stickGraphWindow.samples,
+                                  valueSelector: (sample) => sample.rc.pitch,
+                                  minValue: -500,
+                                  maxValue: 500,
+                                  className:
+                                    "stick-history__line stick-history__line--pitch",
+                                  legendClassName: "stick-history__legend-swatch--pitch",
+                                  legendLabel: "Pitch",
+                                },
+                              ]}
+                            />
+                          ) : null
+                        }
+                      />
+                    </div>
+                  </>
+                ) : null}
+                {overlayState.bottomMetricsVisible ? (
+                  <div className="overlay overlay--bottom">
+                    <MotorDetailCard
+                      motors={snapshot.motors}
+                      spread={motorStats?.spread}
+                      saturation={overlaySummary.saturation}
+                    />
+                    {snapshot.aux.slice(0, 3).map((aux) => (
+                      <StatusPill
+                        key={aux.label}
+                        label={aux.label}
+                        value={aux.active === null ? "n/a" : aux.active ? "High" : "Low"}
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </>
             ) : null}
           </div>
@@ -1710,18 +1762,21 @@ export function App() {
               </label>
             </div>
           </div>
-
-          <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} />
+          {overlayState.historyOpen ? (
+            <HistoryGraph flight={preparedFlight} currentTimeUs={currentTimeUs} />
+          ) : null}
         </section>
 
         <section className="sidecar">
           <EventList events={preparedFlight.events} onSelect={setCurrentTimeUs} />
-          <ComparePanel
-            flights={flights}
-            compareSession={compareSession}
-            onFlightChange={setCompareFlight}
-            onEventTypeChange={setCompareEventType}
-          />
+          {overlayState.compareOpen ? (
+            <ComparePanel
+              flights={flights}
+              compareSession={compareSession}
+              onFlightChange={setCompareFlight}
+              onEventTypeChange={setCompareEventType}
+            />
+          ) : null}
         </section>
       </main>
     </div>

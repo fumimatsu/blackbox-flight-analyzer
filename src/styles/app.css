@@ -109,6 +109,18 @@ input {
   align-items: center;
 }
 
+.toolbar--secondary {
+  margin-top: 12px;
+  align-items: center;
+}
+
+.toolbar__label {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
 .file-button,
 .transport,
 .flight-tab,
@@ -138,6 +150,14 @@ input {
 
 .transport--muted {
   opacity: 0.6;
+}
+
+.transport--toggle {
+  padding-inline: 14px;
+}
+
+.transport--ghost {
+  background: transparent;
 }
 
 .file-button input {
