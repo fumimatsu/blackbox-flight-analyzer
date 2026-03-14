@@ -57,6 +57,10 @@ export const jaMessages = {
     front: "前",
     rear: "後",
     motors: "Motors",
+    battery: "バッテリー",
+    now: "現在",
+    warn: "警告",
+    critical: "危険",
     spread: "Spread",
     headroomLow: "Headroom 低",
     headroomOk: "Headroom OK",
@@ -101,7 +105,7 @@ export const jaMessages = {
     scanningMessage: "DVR から ARMED を探しています。Esc でキャンセルできます。",
     fallback: "自動同期が完了しました。",
     loadedPreparing: "DVR を読み込みました。ARMED 自動同期を準備しています...",
-    notDetected: "先頭 10 秒では ARMED を検出できませんでした。",
+    notDetected: "先頭 60 秒では ARMED を検出できませんでした。",
     rejectedCandidate:
       "低信頼の ARMED 候補を {time}s (OCR {confidence}%) で棄却しました。offset を手動調整してください。",
     detectedAt: "ARMED を {time}s で検出しました (OCR {confidence}%)",
@@ -109,6 +113,7 @@ export const jaMessages = {
   history: {
     title: "履歴グラフ",
     throttle: "スロットル",
+    batteryVoltage: "バッテリー電圧",
     errorMagnitude: "誤差量",
     rollError: "Roll error",
     pitchError: "Pitch error",
@@ -126,6 +131,7 @@ export const jaMessages = {
       tracking: "追従レビュー",
       headroom: "Headroom レビュー",
       highThrottle: "高スロットルレビュー",
+      battery: "バッテリーレビュー",
     },
   },
   export: {
@@ -167,6 +173,7 @@ export const jaMessages = {
       feedforward: "Feedforward",
       idleThrottle: "Idle / Throttle",
       drive: "駆動",
+      battery: "バッテリー",
     },
     fields: {
       rollPid: "Roll PID",
@@ -197,6 +204,10 @@ export const jaMessages = {
       throttleLimit: "Throttle limit",
       tpa: "TPA",
       outputLimit: "Output limit",
+      batteryWarning: "警告しきい値",
+      batteryCritical: "危険しきい値",
+      batteryMax: "最大セル電圧",
+      batterySagCompensation: "Sag compensation",
     },
   },
   events: {
@@ -231,6 +242,16 @@ export const jaMessages = {
       "モーターが張り付き気味になる区間を探すのに向いています。",
     saturationBurstDetail:
       "モーターヘッドルームが不足気味でした。最大モーター出力 {peakMotor}%",
+    batteryWarning: "バッテリー警告帯",
+    batteryWarningReason:
+      "設定上の low-battery 領域に入った時間帯を見つけるのに向いています。",
+    batteryWarningDetail:
+      "電圧が warning threshold を下回りました。最小 {minVoltage}V、warning {warningVoltage}V。",
+    batteryCritical: "バッテリー危険帯",
+    batteryCriticalReason:
+      "land-now 相当の危険領域に入った時間帯を見つけるのに向いています。",
+    batteryCriticalDetail:
+      "電圧が critical range に入りました。最小 {minVoltage}V、critical {criticalVoltage}V。",
     lowThrottleNoRpm: "RPM unavailable; motor/error only",
   },
   compare: {
@@ -343,6 +364,19 @@ export const jaMessages = {
       "feedforward や filtering を変える前に、raw input / RC command / setpoint の差を見てください。",
     rcLinkCheck3:
       "穏やかなクリップでは出ないなら、link や transmitter 側が関与している可能性があります。",
+    batteryTrendLabel: "バッテリー sag 傾向を要確認",
+    batteryTrendEvidence:
+      "レビュー範囲の {progress}% 時点あたりから battery warning が出始めています。最小 {minVoltage}V、warning {warningVoltage}V、warning 中の平均スロットル {throttle}%。{usageHint}",
+    batteryTrendCheck1:
+      "まずは新しいパックや元気なパックで同じ飛ばし方を比較してください。",
+    batteryTrendCheck2:
+      "中程度の負荷で早めに warning に入るなら、パックの弱りも疑ってください。",
+    batteryTrendCheck3:
+      "強い後半パンチでだけ warning に入るなら、使い方由来の可能性もあります。",
+    batteryUsageHeavy:
+      "現状は、弱ったパックというより終盤の強い使い方に見えます。",
+    batteryPossibleWeakPack:
+      "観測された負荷に対して warning が早めなので、パック状態の確認価値があります。",
   },
   stickReview: {
     title: "入力側レビュー",

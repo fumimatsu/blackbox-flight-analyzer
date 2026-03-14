@@ -26,6 +26,7 @@ import {
   detectArmedOverlayTime,
 } from "../domain/sync/autoVideoSync.js";
 import { evaluateDiagnosticRules } from "../domain/analysis/diagnosticRules.js";
+import { getBatteryReviewSummary } from "../domain/analysis/batteryReview.js";
 import { getStickIntentReviewSummary } from "../domain/analysis/stickIntentReview.js";
 import { getFlightSetupSummary } from "../domain/blackbox/setup/flightSetupSummary.js";
 import {
@@ -378,7 +379,7 @@ function prepareFlight(flight, locale = "en") {
     ...flight,
     setupSummary,
     window,
-    events: detectAnalysisEvents(window, locale),
+    events: detectAnalysisEvents(window, locale, { setupSummary }),
   };
 }
 
@@ -1184,6 +1185,104 @@ function ErrorTrendCard({ snapshot, samples, currentTimeUs, t, locale }) {
   );
 }
 
+function BatteryTrendCard({ snapshot, samples, currentTimeUs, batteryReview, t }) {
+  const width = 176;
+  const height = 38;
+  const startUs = samples[0]?.timeUs ?? currentTimeUs ?? 0;
+  const endUs = samples[samples.length - 1]?.timeUs ?? startUs;
+  const cursorX = getTimeCursorX(currentTimeUs, startUs, endUs, width);
+  const currentVoltage = snapshot?.battery?.voltage ?? null;
+  const voltages = samples
+    .map((sample) => getBatteryVoltageValue(sample))
+    .filter((value) => value !== null);
+  const minObserved = voltages.length ? Math.min(...voltages) : null;
+  const maxObserved = voltages.length ? Math.max(...voltages) : null;
+  const chartMin =
+    minObserved === null
+      ? 0
+      : Math.max(
+          0,
+          Math.min(
+            minObserved,
+            batteryReview?.criticalVoltage ?? minObserved,
+            batteryReview?.warningVoltage ?? minObserved
+          ) - 0.25
+        );
+  const chartMax =
+    maxObserved === null
+      ? 1
+      : Math.max(
+          chartMin + 1,
+          Math.max(
+            maxObserved,
+            batteryReview?.criticalVoltage ?? maxObserved,
+            batteryReview?.warningVoltage ?? maxObserved
+          ) + 0.25
+        );
+  const linePoints =
+    voltages.length > 0
+      ? fixedScalePolylinePoints(
+          samples,
+          (sample) => getBatteryVoltageValue(sample),
+          width,
+          height,
+          chartMin,
+          chartMax
+        )
+      : "";
+  const warningY =
+    batteryReview?.warningVoltage !== null && batteryReview?.warningVoltage !== undefined
+      ? thresholdY(batteryReview.warningVoltage, chartMin, chartMax, height)
+      : null;
+  const criticalY =
+    batteryReview?.criticalVoltage !== null && batteryReview?.criticalVoltage !== undefined
+      ? thresholdY(batteryReview.criticalVoltage, chartMin, chartMax, height)
+      : null;
+
+  return (
+    <div className="trend-metric trend-metric--wide">
+      <div className="trend-metric__header">
+        <span>{t("overlay.battery")}</span>
+        <strong>{formatMaybeValue(currentVoltage, 2, "V")}</strong>
+      </div>
+      <svg viewBox={`0 0 ${width} ${height}`} className="trend-metric__chart">
+        <rect x="0" y="0" width={width} height={height} className="trend-metric__bg" />
+        {warningY !== null ? (
+          <line
+            x1="0"
+            x2={width}
+            y1={warningY}
+            y2={warningY}
+            className="trend-metric__threshold trend-metric__threshold--warning"
+          />
+        ) : null}
+        {criticalY !== null ? (
+          <line
+            x1="0"
+            x2={width}
+            y1={criticalY}
+            y2={criticalY}
+            className="trend-metric__threshold trend-metric__threshold--critical"
+          />
+        ) : null}
+        {linePoints ? (
+          <polyline points={linePoints} className="trend-metric__line trend-metric__line--battery" />
+        ) : (
+          <text x={width / 2} y={height / 2 + 4} textAnchor="middle" className="trend-metric__empty">
+            {t("overlay.noData")}
+          </text>
+        )}
+        <line x1={cursorX} x2={cursorX} y1="0" y2={height} className="trend-metric__cursor" />
+      </svg>
+      <div className="trend-metric__battery-thresholds">
+        <span>{t("overlay.now")} {formatMaybeValue(currentVoltage, 2, "V")}</span>
+        <span>{t("overlay.warn")} {formatMaybeValue(batteryReview?.warningVoltage, 2, "V")}</span>
+        <span>{t("overlay.critical")} {formatMaybeValue(batteryReview?.criticalVoltage, 2, "V")}</span>
+      </div>
+    </div>
+  );
+}
+
 function StatusTimelineCard({ snapshot, samples, currentTimeUs, t, locale }) {
   const width = 176;
   const laneConfigs = [
@@ -1402,6 +1501,13 @@ function getRpmFloorValue(sample) {
   return rpmValues.length ? Math.min(...rpmValues) : null;
 }
 
+function getBatteryVoltageValue(sample) {
+  const voltage = sample?.battery?.voltage;
+  return voltage === null || voltage === undefined || Number.isNaN(voltage)
+    ? null
+    : voltage;
+}
+
 function buildHistoryPreset(selectedEvent, t) {
   if (!selectedEvent) {
     return {
@@ -1427,10 +1533,10 @@ function buildHistoryPreset(selectedEvent, t) {
           valueSelector: getMotorMaxValue,
         },
         {
-          key: "stickGap",
-          label: t("history.stickGap"),
-          className: "history__line history__line--stick-gap",
-          valueSelector: getStickGapValue,
+          key: "batteryVoltage",
+          label: t("history.batteryVoltage"),
+          className: "history__line history__line--battery",
+          valueSelector: getBatteryVoltageValue,
         },
       ],
     };
@@ -1561,6 +1667,38 @@ function buildHistoryPreset(selectedEvent, t) {
           },
         ],
       };
+    case EVENT_TYPES.BATTERY_WARNING:
+    case EVENT_TYPES.BATTERY_CRITICAL:
+      return {
+        key: "battery",
+        label: t("history.presets.battery"),
+        lanes: [
+          {
+            key: "batteryVoltage",
+            label: t("history.batteryVoltage"),
+            className: "history__line history__line--battery",
+            valueSelector: getBatteryVoltageValue,
+          },
+          {
+            key: "throttle",
+            label: t("history.throttle"),
+            className: "history__line history__line--throttle",
+            valueSelector: (sample) => sample.rc.throttle,
+          },
+          {
+            key: "motorMax",
+            label: t("history.motorMax"),
+            className: "history__line history__line--motor",
+            valueSelector: getMotorMaxValue,
+          },
+          {
+            key: "errorMagnitude",
+            label: t("history.errorMagnitude"),
+            className: "history__line history__line--error",
+            valueSelector: (sample) => getErrorMagnitude(sample.error),
+          },
+        ],
+      };
     case EVENT_TYPES.HIGH_THROTTLE_STRAIGHT:
     default:
       return {
@@ -1607,15 +1745,20 @@ function HistoryGraph({ flight, currentTimeUs, selectedEvent, t }) {
   const endUs = selectedEvent
     ? Math.min(flight.maxTimeUs, selectedEvent.endUs + paddingUs)
     : flight.maxTimeUs;
-  const lanes = preset.lanes;
   const window =
     selectedEvent && (startUs !== flight.minTimeUs || endUs !== flight.maxTimeUs)
       ? getFlightWindow(flight, startUs, endUs)
       : flight.window;
+  const lanes = preset.lanes.filter((lane) =>
+    window.samples.some((sample) => {
+      const value = lane.valueSelector(sample);
+      return value !== null && value !== undefined && !Number.isNaN(value);
+    })
+  );
   const visibleEvents = (flight.events ?? []).filter(
     (event) => event.startUs <= endUs && event.endUs >= startUs
   );
-  const height = laneHeight * lanes.length;
+  const height = laneHeight * Math.max(lanes.length, 1);
   const cursor = Math.max(
     0,
     Math.min(width, ((currentTimeUs - startUs) / Math.max(endUs - startUs, 1)) * width)
@@ -2113,6 +2256,10 @@ export function App() {
       }
     );
   }, [preparedFlight, currentTimeUs]);
+  const batteryReview = useMemo(
+    () => getBatteryReviewSummary(preparedFlight?.window?.samples ?? [], setupSummary),
+    [preparedFlight?.window?.samples, setupSummary]
+  );
   const summaryEvents = useMemo(() => {
     if (!preparedFlight || !metricsWindow) {
       return [];
@@ -2290,7 +2437,6 @@ export function App() {
 
     try {
       const detected = await detectArmedOverlayTime(session.video.url, {
-        maxScanSeconds: 10,
         signal: abortController.signal,
       });
 
@@ -2979,6 +3125,13 @@ export function App() {
                 ) : null}
                 {overlayState.bottomMetricsVisible ? (
                   <div className="overlay overlay--right-metrics">
+                    <BatteryTrendCard
+                      snapshot={snapshot}
+                      samples={metricsWindow?.samples ?? []}
+                      currentTimeUs={currentTimeUs}
+                      batteryReview={batteryReview}
+                      t={t}
+                    />
                     <MotorDetailCard
                       motors={snapshot.motors}
                       spread={motorStats?.spread}

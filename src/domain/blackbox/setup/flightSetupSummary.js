@@ -243,6 +243,48 @@ function formatFirmware(sysConfig) {
   };
 }
 
+function normalizeCellVoltage(raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
+
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  if (numeric >= 100) {
+    return numeric / 100;
+  }
+
+  return numeric / 10;
+}
+
+function getBatteryConfig(sysConfig, session) {
+  const minCellVoltage = pickFirst(sysConfig, ["vbatmincellvoltage"]);
+  const warningCellVoltage = pickFirst(sysConfig, ["vbatwarningcellvoltage"]);
+  const maxCellVoltage = pickFirst(sysConfig, ["vbatmaxcellvoltage"]);
+  const sagCompensation = pickFirst(sysConfig, ["vbat_sag_compensation"]);
+  const cellCountEstimate = session?.log?.getNumCellsEstimate?.() ?? null;
+
+  if (
+    !isPresent(minCellVoltage) &&
+    !isPresent(warningCellVoltage) &&
+    !isPresent(maxCellVoltage) &&
+    !isPresent(sagCompensation)
+  ) {
+    return null;
+  }
+
+  return {
+    minCellVoltage: normalizeCellVoltage(minCellVoltage),
+    warningCellVoltage: normalizeCellVoltage(warningCellVoltage),
+    maxCellVoltage: normalizeCellVoltage(maxCellVoltage),
+    sagCompensation: isPresent(sagCompensation) ? Number(sagCompensation) : null,
+    cellCountEstimate: isPresent(cellCountEstimate) ? Number(cellCountEstimate) : null,
+  };
+}
+
 function makeItem(key, value, rawValue = value) {
   if (!isPresent(value)) {
     return null;
@@ -378,10 +420,41 @@ export function getFlightSetupSummary(session) {
         sysConfig.motor_output_limit
       ),
     ]),
+    buildGroup("battery", [
+      makeItem(
+        "batteryWarning",
+        isPresent(sysConfig.vbatwarningcellvoltage)
+          ? formatNumber(normalizeCellVoltage(sysConfig.vbatwarningcellvoltage), 2, "V/cell")
+          : null,
+        sysConfig.vbatwarningcellvoltage
+      ),
+      makeItem(
+        "batteryCritical",
+        isPresent(sysConfig.vbatmincellvoltage)
+          ? formatNumber(normalizeCellVoltage(sysConfig.vbatmincellvoltage), 2, "V/cell")
+          : null,
+        sysConfig.vbatmincellvoltage
+      ),
+      makeItem(
+        "batteryMax",
+        isPresent(sysConfig.vbatmaxcellvoltage)
+          ? formatNumber(normalizeCellVoltage(sysConfig.vbatmaxcellvoltage), 2, "V/cell")
+          : null,
+        sysConfig.vbatmaxcellvoltage
+      ),
+      makeItem(
+        "batterySagCompensation",
+        isPresent(sysConfig.vbat_sag_compensation)
+          ? formatNumber(sysConfig.vbat_sag_compensation, 0, "%")
+          : null,
+        sysConfig.vbat_sag_compensation
+      ),
+    ]),
   ].filter((group) => group.hasData);
 
   return {
     firmware: formatFirmware(sysConfig),
+    batteryConfig: getBatteryConfig(sysConfig, session),
     groups,
     hasData: groups.length > 0,
   };

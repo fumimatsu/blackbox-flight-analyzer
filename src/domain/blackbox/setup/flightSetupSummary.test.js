@@ -7,6 +7,9 @@ function buildSession(sysConfig) {
       getSysConfig() {
         return sysConfig;
       },
+      getNumCellsEstimate() {
+        return null;
+      },
     },
   };
 }
@@ -58,6 +61,10 @@ describe("getFlightSetupSummary", () => {
         tpa_rate: 65,
         tpa_breakpoint: 1350,
         motor_output_limit: 92,
+        vbatmincellvoltage: 33,
+        vbatwarningcellvoltage: 35,
+        vbatmaxcellvoltage: 43,
+        vbat_sag_compensation: 15,
       })
     );
 
@@ -69,6 +76,7 @@ describe("getFlightSetupSummary", () => {
       "feedforward",
       "idleThrottle",
       "drive",
+      "battery",
     ]);
     expect(summary.groups.find((group) => group.key === "pid")?.items).toEqual(
       expect.arrayContaining([
@@ -82,6 +90,13 @@ describe("getFlightSetupSummary", () => {
         expect.objectContaining({ key: "throttleLimit", value: "SCALE · 90%" }),
       ])
     );
+    expect(summary.batteryConfig).toEqual({
+      minCellVoltage: 3.3,
+      warningCellVoltage: 3.5,
+      maxCellVoltage: 4.3,
+      sagCompensation: 15,
+      cellCountEstimate: null,
+    });
   });
 
   it("absorbs alias fields and hides empty groups", () => {
@@ -113,5 +128,36 @@ describe("getFlightSetupSummary", () => {
         expect.objectContaining({ key: "dynamicIdleMinRpm", value: "32rpm" }),
       ])
     );
+  });
+
+  it("uses vendor cell count estimates when available", () => {
+    const session = buildSession({
+      vbatmincellvoltage: 33,
+      vbatwarningcellvoltage: 35,
+      vbatmaxcellvoltage: 43,
+    });
+    session.log.getNumCellsEstimate = () => 6;
+
+    const summary = getFlightSetupSummary(session);
+
+    expect(summary.batteryConfig.cellCountEstimate).toBe(6);
+  });
+
+  it("normalizes newer centivolt battery thresholds", () => {
+    const summary = getFlightSetupSummary(
+      buildSession({
+        vbatmincellvoltage: 330,
+        vbatwarningcellvoltage: 345,
+        vbatmaxcellvoltage: 435,
+      })
+    );
+
+    expect(summary.batteryConfig).toEqual({
+      minCellVoltage: 3.3,
+      warningCellVoltage: 3.45,
+      maxCellVoltage: 4.35,
+      sagCompensation: null,
+      cellCountEstimate: null,
+    });
   });
 });

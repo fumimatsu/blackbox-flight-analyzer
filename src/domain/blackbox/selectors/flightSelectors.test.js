@@ -44,6 +44,8 @@ describe.runIf(fs.existsSync(FIXTURE_PATH))("flightSelectors baseline fixture", 
     expect(snapshot.mode.armed).toBe(false);
     expect(snapshot.rc).toHaveProperty("throttle");
     expect(snapshot.error).toHaveProperty("roll");
+    expect(snapshot.battery).toHaveProperty("voltage");
+    expect(snapshot.battery.voltage).toBeGreaterThan(0);
   });
 
   it("finds the first armed time inside the log range", () => {

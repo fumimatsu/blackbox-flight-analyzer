@@ -6,6 +6,7 @@ import {
 import { EVENT_TYPES } from "../blackbox/events/eventConfig.js";
 import { translate } from "../../i18n/index.js";
 import { getStickIntentReviewSummary } from "./stickIntentReview.js";
+import { getBatteryReviewSummary } from "./batteryReview.js";
 
 const OFFICIAL_SOURCES = {
   freestyle: "https://www.betaflight.com/docs/wiki/guides/current/Freestyle-Tuning-Principles",
@@ -47,6 +48,7 @@ function buildEvidence(flight, locale) {
     .filter((value) => value !== null);
   const lowThrottleSummary = getLowThrottleReviewSummary(samples);
   const stickIntentSummary = getStickIntentReviewSummary(samples, setupSummary);
+  const batterySummary = getBatteryReviewSummary(samples, setupSummary);
   const dynamicIdleItem = setupSummary?.groups
     ?.find((group) => group.key === "idleThrottle")
     ?.items?.find((item) => item.key === "dynamicIdleMinRpm");
@@ -67,6 +69,7 @@ function buildEvidence(flight, locale) {
     peakMotor: max(motorPeaks),
     lowThrottleSummary,
     stickIntentSummary,
+    batterySummary,
     dynamicIdleConfigured: dynamicIdleItem?.value ?? null,
   };
 }
@@ -79,6 +82,51 @@ function confidenceLabel(score) {
 }
 
 export const DIAGNOSTIC_RULES = [
+  {
+    id: "battery-sag-trend",
+    labelKey: "diagnostics.batteryTrendLabel",
+    eventTypes: [EVENT_TYPES.BATTERY_WARNING, EVENT_TYPES.BATTERY_CRITICAL],
+    predicate(evidence) {
+      return (
+        evidence.batterySummary.hasThresholds &&
+        (
+          (evidence.eventCounts[EVENT_TYPES.BATTERY_WARNING] ?? 0) >= 1 ||
+          (evidence.eventCounts[EVENT_TYPES.BATTERY_CRITICAL] ?? 0) >= 1
+        )
+      );
+    },
+    evidenceSummary(evidence, locale) {
+      const progress =
+        evidence.batterySummary.firstWarningProgress === null
+          ? 0
+          : Math.round(evidence.batterySummary.firstWarningProgress * 100);
+      const usageHint = evidence.batterySummary.likelyWeakPack
+        ? translate(locale, "diagnostics.batteryPossibleWeakPack")
+        : translate(locale, "diagnostics.batteryUsageHeavy");
+
+      return translate(locale, "diagnostics.batteryTrendEvidence", {
+        progress,
+        minVoltage: (evidence.batterySummary.minVoltage ?? 0).toFixed(2),
+        warningVoltage: (evidence.batterySummary.warningVoltage ?? 0).toFixed(2),
+        throttle: Math.round(evidence.batterySummary.avgThrottleAtWarning ?? 0),
+        usageHint,
+      });
+    },
+    likelyCheckKeys: [
+      "diagnostics.batteryTrendCheck1",
+      "diagnostics.batteryTrendCheck2",
+      "diagnostics.batteryTrendCheck3",
+    ],
+    confidence(evidence) {
+      const score = evidence.batterySummary.likelyWeakPack
+        ? 0.82
+        : (evidence.eventCounts[EVENT_TYPES.BATTERY_CRITICAL] ?? 0) >= 1
+          ? 0.76
+          : 0.6;
+      return confidenceLabel(score);
+    },
+    officialSources: [OFFICIAL_SOURCES.freestyle, OFFICIAL_SOURCES.tuning43],
+  },
   {
     id: "headroom-limited",
     labelKey: "diagnostics.headroomLabel",

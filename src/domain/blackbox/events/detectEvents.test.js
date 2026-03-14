@@ -26,6 +26,7 @@ function buildSample(timeUs, overrides = {}) {
     },
     motors: overrides.motors ?? [42, 44, 43, 45],
     rpm: overrides.rpm ?? [],
+    battery: overrides.battery ?? { voltage: 16.2, amperage: null },
     aux: [],
     mode: { armed: true, names: ["Acro"] },
   };
@@ -109,5 +110,33 @@ describe("detectAnalysisEvents", () => {
       })
     );
     expect(events[0].detail).toContain("RPM floor");
+  });
+
+  it("detects battery warning and critical bands from embedded thresholds", () => {
+    const samples = [
+      buildSample(0, { battery: { voltage: 16.4, amperage: null } }),
+      buildSample(200000, { battery: { voltage: 15.0, amperage: null } }),
+      buildSample(450000, { battery: { voltage: 13.9, amperage: null } }),
+      buildSample(750000, { battery: { voltage: 13.7, amperage: null } }),
+      buildSample(1050000, { battery: { voltage: 13.1, amperage: null } }),
+      buildSample(1350000, { battery: { voltage: 13.0, amperage: null } }),
+    ];
+
+    const events = detectAnalysisEvents(
+      { samples },
+      "en",
+      {
+        setupSummary: {
+          batteryConfig: {
+            minCellVoltage: 3.3,
+            warningCellVoltage: 3.5,
+            maxCellVoltage: 4.3,
+          },
+        },
+      }
+    );
+
+    expect(events.map((event) => event.type)).toContain(EVENT_TYPES.BATTERY_WARNING);
+    expect(events.map((event) => event.type)).toContain(EVENT_TYPES.BATTERY_CRITICAL);
   });
 });

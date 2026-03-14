@@ -33,6 +33,7 @@ function buildSample(timeUs, overrides = {}) {
     },
     motors: overrides.motors ?? [50, 52, 51, 53],
     rpm: [],
+    battery: overrides.battery ?? { voltage: 16.2, amperage: null },
     debug: overrides.debug ?? { mode: null, values: null },
     radio: overrides.radio ?? { rssi: null },
   };
@@ -47,6 +48,12 @@ function buildFlight({ samples, events }) {
     },
     events,
     setupSummary: {
+      batteryConfig: {
+        minCellVoltage: 3.3,
+        warningCellVoltage: 3.5,
+        maxCellVoltage: 4.3,
+        sagCompensation: 0,
+      },
       groups: [
         {
           key: "idleThrottle",
@@ -171,5 +178,27 @@ describe("evaluateDiagnosticRules", () => {
 
     const insights = evaluateDiagnosticRules(flight);
     expect(insights.map((item) => item.id)).toContain("rc-link-quality");
+  });
+
+  it("surfaces battery sag review when warning starts early", () => {
+    const samples = Array.from({ length: 12 }, (_, index) =>
+      buildSample(index * 100000, {
+        rc: { throttle: index < 6 ? 42 : 38 },
+        battery: {
+          voltage: [16.4, 16.2, 15.0, 14.2, 13.9, 13.8, 13.7, 13.6, 13.5, 13.3, 13.2, 13.1][index],
+          amperage: null,
+        },
+      })
+    );
+    const flight = buildFlight({
+      samples,
+      events: [
+        { type: EVENT_TYPES.BATTERY_WARNING, startUs: 200000, endUs: 800000 },
+        { type: EVENT_TYPES.BATTERY_CRITICAL, startUs: 900000, endUs: 1100000 },
+      ],
+    });
+
+    const insights = evaluateDiagnosticRules(flight);
+    expect(insights.map((item) => item.id)).toContain("battery-sag-trend");
   });
 });

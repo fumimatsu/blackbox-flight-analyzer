@@ -15,6 +15,7 @@ const MIN_LIT_PIXELS = 40;
 const MIN_ACCEPTED_SCORE = 35;
 const MIN_ACCEPTED_CONFIDENCE = 55;
 const MIN_ACCEPTED_TEXT_SCORE = 120;
+export const DEFAULT_AUTO_SYNC_SCAN_SECONDS = 60;
 
 function createAbortError() {
   return new DOMException("Auto sync was cancelled.", "AbortError");
@@ -365,6 +366,56 @@ async function recognizeArmed(canvas) {
   };
 }
 
+async function evaluateDetectionAtTime(video, timeSeconds, signal, ocrThreshold) {
+  throwIfAborted(signal);
+  await seekVideo(video, timeSeconds, signal);
+  const templateResult = detectByTemplate(video);
+  if (!templateResult.canvas) {
+    return null;
+  }
+
+  let result = {
+    text: "",
+    confidence: Math.max(0, templateResult.score - 40),
+    score: templateResult.score,
+  };
+
+  if (templateResult.score < ocrThreshold) {
+    const ocrResult = await recognizeArmed(templateResult.canvas);
+    result = {
+      text: ocrResult.text,
+      confidence: Math.max(ocrResult.confidence, result.confidence),
+      score: Math.max(result.score, ocrResult.score),
+    };
+  }
+
+  return {
+    timeSeconds,
+    confidence: result.confidence,
+    score: result.score,
+    text: result.text,
+  };
+}
+
+async function refineDetectionWindow(video, seed, scanEnd, coarseStep, refineStep, signal) {
+  let best = seed;
+  const refineStart = Math.max(0, seed.timeSeconds - coarseStep);
+  const refineEnd = Math.min(scanEnd, seed.timeSeconds + coarseStep);
+
+  for (let timeSeconds = refineStart; timeSeconds <= refineEnd; timeSeconds += refineStep) {
+    const candidate = await evaluateDetectionAtTime(video, timeSeconds, signal, 78);
+    if (!candidate) {
+      continue;
+    }
+
+    if (candidate.score > best.score) {
+      best = candidate;
+    }
+  }
+
+  return classifyDetectionResult(best);
+}
+
 export function classifyDetectionResult(best) {
   if (best.timeSeconds === null || best.score < MIN_ACCEPTED_SCORE) {
     return null;
@@ -394,7 +445,7 @@ export function classifyDetectionResult(best) {
 }
 
 export async function detectArmedOverlayTime(videoUrl, options = {}) {
-  const maxScanSeconds = options.maxScanSeconds ?? 10;
+  const maxScanSeconds = options.maxScanSeconds ?? DEFAULT_AUTO_SYNC_SCAN_SECONDS;
   const coarseStep = options.coarseStepSeconds ?? 0.25;
   const refineStep = options.refineStepSeconds ?? 0.05;
   const signal = options.signal;
@@ -410,34 +461,18 @@ export async function detectArmedOverlayTime(videoUrl, options = {}) {
   };
 
   for (let timeSeconds = 0; timeSeconds <= scanEnd; timeSeconds += coarseStep) {
-    throwIfAborted(signal);
-    await seekVideo(video, timeSeconds, signal);
-    const templateResult = detectByTemplate(video);
-    if (!templateResult.canvas) {
+    const candidate = await evaluateDetectionAtTime(video, timeSeconds, signal, 70);
+    if (!candidate) {
       continue;
     }
-    let result = {
-      text: "",
-      confidence: Math.max(0, templateResult.score - 40),
-      score: templateResult.score,
-    };
 
-    if (templateResult.score < 70) {
-      const ocrResult = await recognizeArmed(templateResult.canvas);
-      result = {
-        text: ocrResult.text,
-        confidence: Math.max(ocrResult.confidence, result.confidence),
-        score: Math.max(result.score, ocrResult.score),
-      };
+    if (candidate.score > best.score) {
+      best = candidate;
     }
 
-    if (result.score > best.score) {
-      best = {
-        timeSeconds,
-        confidence: result.confidence,
-        score: result.score,
-        text: result.text,
-      };
+    const classified = classifyDetectionResult(candidate);
+    if (classified?.accepted) {
+      return refineDetectionWindow(video, candidate, scanEnd, coarseStep, refineStep, signal);
     }
   }
 
@@ -445,42 +480,7 @@ export async function detectArmedOverlayTime(videoUrl, options = {}) {
     return null;
   }
 
-  const refineStart = Math.max(0, best.timeSeconds - coarseStep);
-  const refineEnd = Math.min(scanEnd, best.timeSeconds + coarseStep);
-
-  for (let timeSeconds = refineStart; timeSeconds <= refineEnd; timeSeconds += refineStep) {
-    throwIfAborted(signal);
-    await seekVideo(video, timeSeconds, signal);
-    const templateResult = detectByTemplate(video);
-    if (!templateResult.canvas) {
-      continue;
-    }
-    let result = {
-      text: "",
-      confidence: Math.max(0, templateResult.score - 40),
-      score: templateResult.score,
-    };
-
-    if (templateResult.score < 78) {
-      const ocrResult = await recognizeArmed(templateResult.canvas);
-      result = {
-        text: ocrResult.text,
-        confidence: Math.max(ocrResult.confidence, result.confidence),
-        score: Math.max(result.score, ocrResult.score),
-      };
-    }
-
-    if (result.score > best.score) {
-      best = {
-        timeSeconds,
-        confidence: result.confidence,
-        score: result.score,
-        text: result.text,
-      };
-    }
-  }
-
-  return classifyDetectionResult(best);
+  return refineDetectionWindow(video, best, scanEnd, coarseStep, refineStep, signal);
 }
 
 export function calculateAutoVideoOffset(

@@ -662,6 +662,14 @@ input {
   stroke-dasharray: 4 4;
 }
 
+.trend-metric__threshold--warning {
+  stroke: rgba(255, 187, 112, 0.58);
+}
+
+.trend-metric__threshold--critical {
+  stroke: rgba(255, 120, 120, 0.65);
+}
+
 .trend-metric__cursor {
   stroke: rgba(255, 255, 255, 0.42);
   stroke-width: 1.5;
@@ -687,9 +695,22 @@ input {
   stroke: var(--rpm);
 }
 
+.trend-metric__line--battery {
+  stroke: #9bd1ff;
+}
+
 .trend-metric__empty {
   fill: var(--muted);
   font-size: 11px;
+}
+
+.trend-metric__battery-thresholds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .status-pill span,
@@ -1458,6 +1479,14 @@ input {
   fill: rgba(255, 127, 110, 0.74);
 }
 
+.event-timeline__segment--battery-warning {
+  fill: rgba(123, 214, 255, 0.76);
+}
+
+.event-timeline__segment--battery-critical {
+  fill: rgba(255, 92, 128, 0.8);
+}
+
 .event-timeline__legend {
   display: flex;
   flex-wrap: wrap;
@@ -1497,6 +1526,14 @@ input {
 
 .event-timeline__legend-dot--saturation-burst {
   background: rgba(255, 127, 110, 0.95);
+}
+
+.event-timeline__legend-dot--battery-warning {
+  background: rgba(123, 214, 255, 0.95);
+}
+
+.event-timeline__legend-dot--battery-critical {
+  background: rgba(255, 92, 128, 0.95);
 }
 
 .event-timeline__empty {
@@ -1875,6 +1912,10 @@ option:hover {
   stroke: rgba(170, 156, 255, 0.98);
 }
 
+.history__line--battery {
+  stroke: rgba(123, 214, 255, 0.98);
+}
+
 .history__cursor {
   stroke: var(--accent);
   stroke-width: 2;
@@ -1903,6 +1944,14 @@ option:hover {
 
 .history__event--saturation-burst {
   fill: rgba(255, 127, 110, 0.16);
+}
+
+.history__event--battery-warning {
+  fill: rgba(123, 214, 255, 0.16);
+}
+
+.history__event--battery-critical {
+  fill: rgba(255, 92, 128, 0.18);
 }
 
 .history__legend {
@@ -1968,6 +2017,10 @@ option:hover {
 
 .history__legend-swatch--rpmFloor {
   background: rgba(142, 222, 255, 0.98);
+}
+
+.history__legend-swatch--batteryVoltage {
+  background: rgba(123, 214, 255, 0.98);
 }
 
 .event-list__item {

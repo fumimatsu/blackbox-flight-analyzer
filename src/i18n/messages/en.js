@@ -57,6 +57,10 @@ export const enMessages = {
     front: "Front",
     rear: "Rear",
     motors: "Motors",
+    battery: "Battery",
+    now: "Now",
+    warn: "Warn",
+    critical: "Critical",
     spread: "Spread",
     headroomLow: "Headroom Low",
     headroomOk: "Headroom OK",
@@ -101,7 +105,7 @@ export const enMessages = {
     scanningMessage: "Looking for ARMED in the DVR. Press Esc to cancel.",
     fallback: "Auto sync finished.",
     loadedPreparing: "DVR loaded. Preparing ARMED auto sync...",
-    notDetected: "ARMED text was not detected in the first 10 seconds.",
+    notDetected: "ARMED text was not detected in the first 60 seconds.",
     rejectedCandidate:
       "Rejected low-confidence ARMED candidate at {time}s (OCR {confidence}%). Adjust offset manually.",
     detectedAt: "ARMED detected at {time}s (OCR {confidence}%)",
@@ -109,6 +113,7 @@ export const enMessages = {
   history: {
     title: "Compact History",
     throttle: "Throttle",
+    batteryVoltage: "Battery voltage",
     errorMagnitude: "Error magnitude",
     rollError: "Roll error",
     pitchError: "Pitch error",
@@ -126,6 +131,7 @@ export const enMessages = {
       tracking: "Tracking review",
       headroom: "Headroom review",
       highThrottle: "High-throttle review",
+      battery: "Battery review",
     },
   },
   export: {
@@ -167,6 +173,7 @@ export const enMessages = {
       feedforward: "Feedforward",
       idleThrottle: "Idle / throttle",
       drive: "Motor drive",
+      battery: "Battery",
     },
     fields: {
       rollPid: "Roll PID",
@@ -197,6 +204,10 @@ export const enMessages = {
       throttleLimit: "Throttle limit",
       tpa: "TPA",
       outputLimit: "Output limit",
+      batteryWarning: "Warn threshold",
+      batteryCritical: "Critical threshold",
+      batteryMax: "Max cell",
+      batterySagCompensation: "Sag compensation",
     },
   },
   events: {
@@ -231,6 +242,16 @@ export const enMessages = {
       "Useful for locating moments where motors appear to max out.",
     saturationBurstDetail:
       "Motor headroom looked limited. Peak motor {peakMotor}%",
+    batteryWarning: "Battery warning band",
+    batteryWarningReason:
+      "Useful for seeing when the pack entered the configured low-battery zone.",
+    batteryWarningDetail:
+      "Voltage stayed below the warning threshold. Min {minVoltage}V, warning {warningVoltage}V.",
+    batteryCritical: "Battery critical band",
+    batteryCriticalReason:
+      "Useful for spotting periods that reached the configured land-now range.",
+    batteryCriticalDetail:
+      "Voltage entered the critical range. Min {minVoltage}V, critical {criticalVoltage}V.",
     lowThrottleNoRpm: "RPM unavailable; using motor/error only",
   },
   compare: {
@@ -343,6 +364,19 @@ export const enMessages = {
       "Compare raw input, RC command, and setpoint before changing feedforward or filtering.",
     rcLinkCheck3:
       "If the issue disappears on a calmer clip, the link or transmitter side may be part of the problem.",
+    batteryTrendLabel: "Battery sag trend worth checking",
+    batteryTrendEvidence:
+      "Battery warnings started around {progress}% into the review window. Min {minVoltage}V, warning {warningVoltage}V, average warning throttle {throttle}%. {usageHint}",
+    batteryTrendCheck1:
+      "Compare the same style of flight with a fresher pack before assuming the tune changed.",
+    batteryTrendCheck2:
+      "If warnings arrive early at only moderate load, the pack may be getting weak.",
+    batteryTrendCheck3:
+      "If warnings only appear late in hard pulls, the pattern may be usage-driven rather than pack health alone.",
+    batteryUsageHeavy:
+      "This looks more like heavy late-flight use than an obviously weak pack.",
+    batteryPossibleWeakPack:
+      "The warning arrived relatively early for the observed load, so pack condition is worth checking.",
   },
   stickReview: {
     title: "Stick-side review",

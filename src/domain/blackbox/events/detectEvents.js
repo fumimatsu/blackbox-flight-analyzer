@@ -5,6 +5,7 @@ import {
 } from "../derived/flightDerived.js";
 import { EVENT_CONFIG, EVENT_TYPES } from "./eventConfig.js";
 import { translate } from "../../../i18n/index.js";
+import { getBatteryReviewSummary } from "../../analysis/batteryReview.js";
 
 function axisPeak(values) {
   const numbers = values.filter((value) => value !== null && value !== undefined && !Number.isNaN(value));
@@ -14,7 +15,13 @@ function axisPeak(values) {
   return Math.max(...numbers.map((value) => Math.abs(value)));
 }
 
-function summarizeSegment(type, samples, locale, lowThrottleContext = null) {
+function summarizeSegment(
+  type,
+  samples,
+  locale,
+  lowThrottleContext = null,
+  batteryContext = null
+) {
   const config = EVENT_CONFIG[type];
   const peakError = Math.round(
     Math.max(...samples.map((sample) => sample.errorMagnitude ?? 0))
@@ -73,6 +80,22 @@ function summarizeSegment(type, samples, locale, lowThrottleContext = null) {
         summary: translate(locale, config.labelKey),
         detail: translate(locale, "events.saturationBurstDetail", { peakMotor }),
       };
+    case EVENT_TYPES.BATTERY_WARNING:
+      return {
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.batteryWarningDetail", {
+          minVoltage: (batteryContext?.minVoltage ?? 0).toFixed(2),
+          warningVoltage: (batteryContext?.warningVoltage ?? 0).toFixed(2),
+        }),
+      };
+    case EVENT_TYPES.BATTERY_CRITICAL:
+      return {
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.batteryCriticalDetail", {
+          minVoltage: (batteryContext?.minVoltage ?? 0).toFixed(2),
+          criticalVoltage: (batteryContext?.criticalVoltage ?? 0).toFixed(2),
+        }),
+      };
     default:
       return {
         summary: translate(locale, config.labelKey),
@@ -81,7 +104,7 @@ function summarizeSegment(type, samples, locale, lowThrottleContext = null) {
   }
 }
 
-function finalizeSegment(events, type, startUs, endUs, samples, locale) {
+function finalizeSegment(events, type, startUs, endUs, samples, locale, options = {}) {
   const config = EVENT_CONFIG[type];
   if (startUs === null || endUs === null || !samples.length) {
     return;
@@ -114,7 +137,24 @@ function finalizeSegment(events, type, startUs, endUs, samples, locale) {
         errorPeak: lowThrottleSummary.recoveryErrorPeak,
       }
     : null;
-  const summary = summarizeSegment(type, samples, locale, lowThrottleContext);
+  const batteryContext = options.batteryThresholds
+    ? {
+        warningVoltage: options.batteryThresholds.warningVoltage,
+        criticalVoltage: options.batteryThresholds.criticalVoltage,
+        minVoltage: Math.min(
+          ...samples
+            .map((sample) => sample?.battery?.voltage)
+            .filter((value) => value !== null && value !== undefined && !Number.isNaN(value))
+        ),
+      }
+    : null;
+  const summary = summarizeSegment(
+    type,
+    samples,
+    locale,
+    lowThrottleContext,
+    batteryContext
+  );
 
   events.push({
     id: `${type}-${startUs}`,
@@ -128,10 +168,11 @@ function finalizeSegment(events, type, startUs, endUs, samples, locale) {
     detail: summary.detail,
     reviewReason: translate(locale, config.reviewReasonKey),
     lowThrottleContext,
+    batteryContext,
   });
 }
 
-function segmentByPredicate(samples, type, predicate, locale) {
+function segmentByPredicate(samples, type, predicate, locale, options = {}) {
   const events = [];
   const config = EVENT_CONFIG[type];
   let currentStartUs = null;
@@ -158,7 +199,15 @@ function segmentByPredicate(samples, type, predicate, locale) {
     }
 
     if (currentStartUs !== null) {
-      finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples, locale);
+      finalizeSegment(
+        events,
+        type,
+        currentStartUs,
+        currentEndUs,
+        currentSamples,
+        locale,
+        options
+      );
       currentStartUs = null;
       currentEndUs = null;
       currentSamples = [];
@@ -166,7 +215,15 @@ function segmentByPredicate(samples, type, predicate, locale) {
   }
 
   if (currentStartUs !== null && currentEndUs !== null) {
-    finalizeSegment(events, type, currentStartUs, currentEndUs, currentSamples, locale);
+    finalizeSegment(
+      events,
+      type,
+      currentStartUs,
+      currentEndUs,
+      currentSamples,
+      locale,
+      options
+    );
   }
 
   return events;
@@ -208,11 +265,13 @@ function pruneOverlappingEvents(events) {
   return kept.sort((left, right) => left.startUs - right.startUs);
 }
 
-export function detectAnalysisEvents(windowSlice, locale = "en") {
+export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
   const samples = windowSlice.samples;
   if (!samples.length) {
     return [];
   }
+
+  const batteryReview = getBatteryReviewSummary(samples, options.setupSummary);
 
   const derived = samples.map((sample, index) => {
     const previous = samples[index - 1];
@@ -238,6 +297,17 @@ export function detectAnalysisEvents(windowSlice, locale = "en") {
       errorMagnitude: getErrorMagnitude(sample.error),
       turnInput: rcTurnInput,
       setpointTurnInput,
+      batteryState:
+        batteryReview.hasThresholds &&
+        sample?.battery?.voltage !== null &&
+        sample?.battery?.voltage !== undefined &&
+        !Number.isNaN(sample.battery.voltage)
+          ? sample.battery.voltage <= batteryReview.criticalVoltage
+            ? "critical"
+            : sample.battery.voltage <= batteryReview.warningVoltage
+              ? "warning"
+              : null
+          : null,
     };
   });
 
@@ -311,6 +381,50 @@ export function detectAnalysisEvents(windowSlice, locale = "en") {
         score: (sample.status.motor.max ?? 0) + (sample.errorMagnitude ?? 0) * 0.2,
       };
     }, locale),
+    ...segmentByPredicate(
+      derived,
+      EVENT_TYPES.BATTERY_WARNING,
+      (sample) => {
+        if (sample.batteryState !== "warning") {
+          return false;
+        }
+        return {
+          score:
+            ((batteryReview.warningVoltage ?? sample.battery.voltage ?? 0) -
+              (sample.battery?.voltage ?? 0)) *
+            10,
+        };
+      },
+      locale,
+      {
+        batteryThresholds: {
+          warningVoltage: batteryReview.warningVoltage,
+          criticalVoltage: batteryReview.criticalVoltage,
+        },
+      }
+    ),
+    ...segmentByPredicate(
+      derived,
+      EVENT_TYPES.BATTERY_CRITICAL,
+      (sample) => {
+        if (sample.batteryState !== "critical") {
+          return false;
+        }
+        return {
+          score:
+            ((batteryReview.criticalVoltage ?? sample.battery.voltage ?? 0) -
+              (sample.battery?.voltage ?? 0)) *
+            10,
+        };
+      },
+      locale,
+      {
+        batteryThresholds: {
+          warningVoltage: batteryReview.warningVoltage,
+          criticalVoltage: batteryReview.criticalVoltage,
+        },
+      }
+    ),
   ];
 
   return pruneOverlappingEvents(events);

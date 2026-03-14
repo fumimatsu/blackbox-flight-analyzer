@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { calculateAutoVideoOffset, classifyDetectionResult } from "./autoVideoSync.js";
+import {
+  DEFAULT_AUTO_SYNC_SCAN_SECONDS,
+  calculateAutoVideoOffset,
+  classifyDetectionResult,
+} from "./autoVideoSync.js";
 
 describe("classifyDetectionResult", () => {
   it("rejects low-confidence candidates so offsets are not auto-applied", async () => {
@@ -34,5 +38,11 @@ describe("calculateAutoVideoOffset", () => {
 
   it("does not allow negative elapsed log time", () => {
     expect(calculateAutoVideoOffset(500000, 1.5, 1000000)).toBeCloseTo(1.5, 5);
+  });
+});
+
+describe("DEFAULT_AUTO_SYNC_SCAN_SECONDS", () => {
+  it("scans up to one minute by default", () => {
+    expect(DEFAULT_AUTO_SYNC_SCAN_SECONDS).toBe(60);
   });
 });

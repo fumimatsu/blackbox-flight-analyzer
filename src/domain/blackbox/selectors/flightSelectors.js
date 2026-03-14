@@ -106,6 +106,20 @@ function normalizeGyro(log, raw) {
   }
 }
 
+function normalizeBatteryVoltage(raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
+  return raw >= 100 ? raw / 100 : raw;
+}
+
+function normalizeAmperage(raw) {
+  if (!isPresent(raw)) {
+    return null;
+  }
+  return raw >= 100 ? raw / 100 : raw;
+}
+
 function normalizeMotor(log, raw) {
   if (!isPresent(raw)) {
     return null;
@@ -247,6 +261,17 @@ function getAttitude(session, frame) {
   };
 }
 
+function getBatteryState(session, frame) {
+  return {
+    voltage: normalizeBatteryVoltage(
+      getValue(frame, resolveFieldIndex(session, ["vbatLatest"]))
+    ),
+    amperage: normalizeAmperage(
+      getValue(frame, resolveFieldIndex(session, ["amperageLatest"]))
+    ),
+  };
+}
+
 function getFrameAtTime(session, timeUs) {
   const clamped = clampTime(session, timeUs);
   const frameWindow = session.log.getCurrentFrameAtTime(clamped);
@@ -273,6 +298,7 @@ function mapSampleFromFrame(session, frame, timeUs = null) {
     gyro: mapAxisValues(session, frame, "gyro"),
     error: mapAxisValues(session, frame, "error"),
     attitude: getAttitude(session, frame),
+    battery: getBatteryState(session, frame),
     motors: getMotorValues(session, frame),
     rpm: getRpmValues(session, frame),
     aux: getAuxChannels(session, frame),
