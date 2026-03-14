@@ -35,6 +35,8 @@ export const jaMessages = {
     pause: "停止",
     autoSyncArmed: "ARMED 自動同期",
     stickGraphs: "スティック履歴",
+    fullscreen: "全画面",
+    exitFullscreen: "全画面を閉じる",
     stickMode: "スティックモード",
     mode1: "Mode 1",
     mode2: "Mode 2",

@@ -392,6 +392,34 @@ input {
   background: #05090d;
 }
 
+.viewer__stage:fullscreen,
+.viewer__stage--fullscreen {
+  width: 100vw;
+  height: 100vh;
+  min-height: 100vh;
+  border-radius: 0;
+  border: 0;
+}
+
+.viewer__fullscreen-button {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 5;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(5, 10, 14, 0.72);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-size: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(12px);
+}
+
+.viewer__fullscreen-button:hover {
+  border-color: rgba(125, 242, 197, 0.4);
+}
+
 .viewer__video,
 .viewer__scrim,
 .viewer__placeholder {

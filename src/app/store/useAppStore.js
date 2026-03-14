@@ -41,6 +41,7 @@ export const useAppStore = create((set) => ({
     bottomMetricsVisible: true,
     stickMiniGraphEnabled: true,
     stickMiniGraphWindowUs: 1000000,
+    viewerFullscreen: false,
   },
   addFlight(flight) {
     set((state) => {
@@ -210,6 +211,7 @@ export const useAppStore = create((set) => ({
         attitudeVisible: true,
         stickOverlayVisible: true,
         bottomMetricsVisible: true,
+        viewerFullscreen: false,
       },
     }));
   },

@@ -2105,6 +2105,7 @@ function ExportPanel({ exportState, support, onStart, onCancel, onClose, t }) {
 
 export function App() {
   const videoRef = useRef(null);
+  const viewerStageRef = useRef(null);
   const playbackFrameRef = useRef(0);
   const playbackClockRef = useRef(0);
   const autoSyncAbortRef = useRef(null);
@@ -2782,6 +2783,36 @@ export function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const onFullscreenChange = () => {
+      setOverlayVisibility(
+        "viewerFullscreen",
+        document.fullscreenElement === viewerStageRef.current
+      );
+    };
+
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    onFullscreenChange();
+
+    return () => {
+      document.removeEventListener("fullscreenchange", onFullscreenChange);
+    };
+  }, [setOverlayVisibility]);
+
+  async function toggleViewerFullscreen() {
+    const stage = viewerStageRef.current;
+    if (!stage) {
+      return;
+    }
+
+    if (document.fullscreenElement === stage) {
+      await document.exitFullscreen?.();
+      return;
+    }
+
+    await stage.requestFullscreen?.();
+  }
+
   if (!preparedFlight) {
     return (
       <div className="empty-state">
@@ -2883,6 +2914,9 @@ export function App() {
             disabled={!preparedFlight.video}
           >
             {t("app.exportVideo")}
+          </button>
+          <button className="transport" type="button" onClick={() => void toggleViewerFullscreen()}>
+            {overlayState.viewerFullscreen ? t("app.exitFullscreen") : t("app.fullscreen")}
           </button>
           <label className="rate-select-wrap">
             <span className="rate-slider__label">{t("locale.label")}</span>
@@ -3010,7 +3044,17 @@ export function App() {
 
       <main className="workspace">
         <section className="viewer">
-          <div className="viewer__stage">
+          <div
+            ref={viewerStageRef}
+            className={`viewer__stage ${overlayState.viewerFullscreen ? "viewer__stage--fullscreen" : ""}`}
+          >
+            <button
+              className="viewer__fullscreen-button"
+              type="button"
+              onClick={() => void toggleViewerFullscreen()}
+            >
+              {overlayState.viewerFullscreen ? t("app.exitFullscreen") : t("app.fullscreen")}
+            </button>
             {preparedFlight.video ? (
               <video
                 ref={videoRef}

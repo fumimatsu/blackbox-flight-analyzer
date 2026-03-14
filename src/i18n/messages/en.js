@@ -35,6 +35,8 @@ export const enMessages = {
     pause: "Pause",
     autoSyncArmed: "Auto sync ARMED",
     stickGraphs: "Stick graphs",
+    fullscreen: "Fullscreen",
+    exitFullscreen: "Exit fullscreen",
     stickMode: "Stick mode",
     mode1: "Mode 1",
     mode2: "Mode 2",
