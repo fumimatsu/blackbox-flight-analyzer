@@ -2785,9 +2785,10 @@ export function App() {
 
   useEffect(() => {
     const onFullscreenChange = () => {
+      const stage = viewerStageRef.current;
       setOverlayVisibility(
         "viewerFullscreen",
-        document.fullscreenElement === viewerStageRef.current
+        Boolean(stage) && document.fullscreenElement === stage
       );
     };
 
