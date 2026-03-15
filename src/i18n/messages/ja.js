@@ -244,6 +244,11 @@ export const jaMessages = {
       "モーターが張り付き気味になる区間を探すのに向いています。",
     saturationBurstDetail:
       "モーターヘッドルームが不足気味でした。最大モーター出力 {peakMotor}%",
+    motorChatter: "モーター回転ビビり",
+    motorChatterReason:
+      "単発の回転落ちではなく、回転数が上下に暴れる区間を見つけるのに向いています。",
+    motorChatterDetail:
+      "RPM 変動 {oscillation}%、反転率 {flipRate}%、影響モーター {affectedMotors} 基、平均スロットル {avgThrottle}%",
     batteryWarning: "バッテリー警告帯",
     batteryWarningReason:
       "設定上の low-battery 領域に入った時間帯を見つけるのに向いています。",
@@ -313,6 +318,15 @@ export const jaMessages = {
     officialBasis: "Official basis",
     confidenceMedium: "medium",
     confidenceLow: "low",
+    motorChatterLabel: "モーター回転ビビりを要確認",
+    motorChatterEvidence:
+      "アクティブ飛行中に RPM の上下動が繰り返し出ています。平均変動 {oscillation}%、反転率 {flipRate}%、影響モーター {affectedMotors} 基、平均スロットル {throttle}%。",
+    motorChatterCheck1:
+      "まず prop、シャフト、ベル、ベアリング、取り付けを確認してください。物理要因を外さずに tune を触るのは無駄です。",
+    motorChatterCheck2:
+      "次に RPM filter の効き、motor timing、特定モーターだけが暴れていないかを確認してください。",
+    motorChatterCheck3:
+      "機械側が健全なら、同じシーンで D-term や filter の攻めすぎを少し戻して比較してください。",
     headroomLabel: "Headroom 不足の可能性",
     headroomEvidence:
       "Headroom 制限が繰り返し出ている状況と整合します。Saturation share {share}%、最大モーター出力 {peak}%。",

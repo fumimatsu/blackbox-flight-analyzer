@@ -244,6 +244,11 @@ export const enMessages = {
       "Useful for locating moments where motors appear to max out.",
     saturationBurstDetail:
       "Motor headroom looked limited. Peak motor {peakMotor}%",
+    motorChatter: "Motor rpm chatter",
+    motorChatterReason:
+      "Useful for spotting repeated motor-speed oscillation that looks more like chatter than a single dip or punch-out.",
+    motorChatterDetail:
+      "RPM oscillation {oscillation}%, flip rate {flipRate}%, affected motors {affectedMotors}, average throttle {avgThrottle}%",
     batteryWarning: "Battery warning band",
     batteryWarningReason:
       "Useful for seeing when the pack entered the configured low-battery zone.",
@@ -313,6 +318,15 @@ export const enMessages = {
     officialBasis: "Official basis",
     confidenceMedium: "medium",
     confidenceLow: "low",
+    motorChatterLabel: "Motor RPM chatter worth checking",
+    motorChatterEvidence:
+      "Repeated RPM oscillation is visible during active flight. Mean oscillation {oscillation}%, flip rate {flipRate}%, affected motors {affectedMotors}, average throttle {throttle}%.",
+    motorChatterCheck1:
+      "Check props, shafts, bells, bearings, and mounting first. Physical damage creates chatter faster than PID guesses fix it.",
+    motorChatterCheck2:
+      "Check RPM filter health, motor timing, and whether one or two motors are doing most of the oscillating.",
+    motorChatterCheck3:
+      "If the frame is mechanically clean, compare the same move after easing D-term or filter aggression instead of guessing blind.",
     headroomLabel: "Headroom limitation likely",
     headroomEvidence:
       "Consistent with repeated headroom-limited output. Saturation share {share}%, peak motor {peak}%.",

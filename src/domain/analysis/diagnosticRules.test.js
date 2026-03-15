@@ -32,7 +32,7 @@ function buildSample(timeUs, overrides = {}) {
       ...(overrides.error ?? {}),
     },
     motors: overrides.motors ?? [50, 52, 51, 53],
-    rpm: [],
+    rpm: overrides.rpm ?? [],
     battery: overrides.battery ?? { voltage: 16.2, amperage: null },
     debug: overrides.debug ?? { mode: null, values: null },
     radio: overrides.radio ?? { rssi: null },
@@ -82,6 +82,28 @@ describe("evaluateDiagnosticRules", () => {
 
     const insights = evaluateDiagnosticRules(flight);
     expect(insights.map((item) => item.id)).toContain("headroom-limited");
+  });
+
+  it("surfaces motor chatter guidance when rpm oscillation repeats", () => {
+    const samples = Array.from({ length: 24 }, (_, index) =>
+      buildSample(index * 25000, {
+        rc: { throttle: 62 },
+        rpm:
+          index % 2 === 0
+            ? [1500, 1080, 1490, 1100]
+            : [1060, 1520, 1040, 1530],
+      })
+    );
+    const flight = buildFlight({
+      samples,
+      events: [
+        { type: EVENT_TYPES.MOTOR_CHATTER, startUs: 0, endUs: 350000 },
+      ],
+    });
+
+    const insights = evaluateDiagnosticRules(flight);
+
+    expect(insights.map((item) => item.id)).toContain("motor-rpm-chatter");
   });
 
   it("surfaces low-throttle instability when chop turns and errors cluster without saturation", () => {

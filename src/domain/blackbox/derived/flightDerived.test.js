@@ -3,6 +3,7 @@ import {
   getFlightStatusFlags,
   getFlightStatusSummary,
   getLowThrottleReviewSummary,
+  getMotorChatterReviewSummary,
   getStickAxisUsage,
 } from "./flightDerived.js";
 
@@ -142,5 +143,53 @@ describe("getLowThrottleReviewSummary", () => {
     expect(summary.recoveryWindows).toHaveLength(1);
     expect(summary.recoveryWindows[0].rpmDip).toBeNull();
     expect(summary.recoveryErrorPeak).toBe(120);
+  });
+});
+
+describe("getMotorChatterReviewSummary", () => {
+  function buildSample(timeUs, overrides = {}) {
+    return {
+      timeUs,
+      rc: {
+        throttle: 55,
+        ...(overrides.rc ?? {}),
+      },
+      rpm: overrides.rpm ?? [1500, 1500, 1500, 1500],
+      mode: overrides.mode ?? { armed: true, names: ["Acro"] },
+    };
+  }
+
+  it("summarizes active rpm oscillation and affected motors", () => {
+    const samples = [
+      buildSample(0, { rpm: [1500, 1480, 1510, 1490] }),
+      buildSample(10000, { rpm: [1700, 1290, 1700, 1310] }),
+      buildSample(20000, { rpm: [1320, 1710, 1320, 1700] }),
+      buildSample(30000, { rpm: [1710, 1300, 1710, 1300] }),
+      buildSample(40000, { rpm: [1310, 1690, 1310, 1690] }),
+    ];
+
+    const summary = getMotorChatterReviewSummary(samples);
+
+    expect(summary.hasRpmData).toBe(true);
+    expect(summary.activePairCount).toBeGreaterThan(0);
+    expect(summary.oscillationScore).toBeGreaterThan(0.08);
+    expect(summary.flipRate).toBeGreaterThan(0.6);
+    expect(summary.affectedMotorCount).toBeGreaterThanOrEqual(2);
+  });
+
+  it("does not treat idle rpm as active chatter evidence", () => {
+    const samples = [
+      buildSample(0, { rc: { throttle: 4 }, rpm: [320, 330, 310, 325] }),
+      buildSample(10000, { rc: { throttle: 4 }, rpm: [500, 140, 520, 150] }),
+      buildSample(20000, { rc: { throttle: 4 }, rpm: [180, 520, 170, 510] }),
+      buildSample(30000, { rc: { throttle: 4 }, rpm: [480, 130, 500, 140] }),
+    ];
+
+    const summary = getMotorChatterReviewSummary(samples);
+
+    expect(summary.hasRpmData).toBe(true);
+    expect(summary.activePairCount).toBe(0);
+    expect(summary.avgThrottle).toBeNull();
+    expect(summary.oscillationScore).toBeLessThan(0.05);
   });
 });

@@ -139,4 +139,43 @@ describe("detectAnalysisEvents", () => {
     expect(events.map((event) => event.type)).toContain(EVENT_TYPES.BATTERY_WARNING);
     expect(events.map((event) => event.type)).toContain(EVENT_TYPES.BATTERY_CRITICAL);
   });
+
+  it("detects motor chatter during active rpm oscillation", () => {
+    const samples = Array.from({ length: 8 }, (_, index) =>
+      buildSample(index * 50000, {
+        rc: { throttle: 58 },
+        rpm:
+          index % 2 === 0
+            ? [1520, 1120, 1510, 1130]
+            : [1090, 1540, 1080, 1560],
+      })
+    );
+
+    const events = detectAnalysisEvents({ samples });
+    const chatter = events.find((event) => event.type === EVENT_TYPES.MOTOR_CHATTER);
+
+    expect(chatter).toBeTruthy();
+    expect(chatter.detail).toContain("oscillation");
+    expect(chatter.motorChatterContext).toEqual(
+      expect.objectContaining({
+        affectedMotorCount: expect.any(Number),
+      })
+    );
+  });
+
+  it("ignores rpm oscillation near idle spin-down", () => {
+    const samples = Array.from({ length: 8 }, (_, index) =>
+      buildSample(index * 50000, {
+        rc: { throttle: 3 },
+        rpm:
+          index % 2 === 0
+            ? [420, 150, 410, 155]
+            : [160, 430, 150, 440],
+      })
+    );
+
+    const events = detectAnalysisEvents({ samples });
+
+    expect(events.map((event) => event.type)).not.toContain(EVENT_TYPES.MOTOR_CHATTER);
+  });
 });

@@ -31,6 +31,12 @@ export function getRpmStats(rpm) {
   };
 }
 
+function getFiniteValues(values) {
+  return values.filter(
+    (value) => value !== null && value !== undefined && !Number.isNaN(value)
+  );
+}
+
 export function getSaturationFlag(snapshot) {
   const motorStats = getMotorStats(snapshot.motors);
   if (motorStats.max === null || motorStats.spread === null) {
@@ -40,9 +46,7 @@ export function getSaturationFlag(snapshot) {
 }
 
 export function getErrorMagnitude(error) {
-  const values = [error.roll, error.pitch, error.yaw].filter(
-    (value) => value !== null && value !== undefined && !Number.isNaN(value)
-  );
+  const values = getFiniteValues([error.roll, error.pitch, error.yaw]);
   if (!values.length) {
     return null;
   }
@@ -130,9 +134,7 @@ export function getStickAxisUsage(samples) {
 }
 
 function getSampleRpmFloor(sample) {
-  const rpmValues = (sample?.rpm ?? []).filter(
-    (value) => value !== null && value !== undefined && !Number.isNaN(value)
-  );
+  const rpmValues = getFiniteValues(sample?.rpm ?? []);
   if (!rpmValues.length) {
     return null;
   }
@@ -140,9 +142,7 @@ function getSampleRpmFloor(sample) {
 }
 
 function getSampleMotorFloor(sample) {
-  const motorValues = (sample?.motors ?? []).filter(
-    (value) => value !== null && value !== undefined && !Number.isNaN(value)
-  );
+  const motorValues = getFiniteValues(sample?.motors ?? []);
   if (!motorValues.length) {
     return null;
   }
@@ -154,6 +154,170 @@ function average(values) {
     return null;
   }
   return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+export function getMotorChatterReviewSummary(samples, options = {}) {
+  const minActiveThrottle = options.minActiveThrottleThreshold ?? 18;
+  const minAverageRpm = options.minAverageRpm ?? 900;
+  const minFlipNormalizedDelta = options.minFlipNormalizedDelta ?? 0.03;
+  const minAffectedMotorSpreadRatio = options.minAffectedMotorSpreadRatio ?? 0.18;
+  const maxMotorCount = Math.max(
+    0,
+    ...samples.map((sample) => getFiniteValues(sample?.rpm ?? []).length)
+  );
+
+  if (!samples.length || maxMotorCount === 0) {
+    return {
+      hasRpmData: false,
+      sampleCount: samples.length,
+      pairCount: 0,
+      activePairCount: 0,
+      avgThrottle: null,
+      avgRpm: null,
+      avgNormalizedDelta: null,
+      peakNormalizedDelta: null,
+      flipRate: 0,
+      oscillationScore: 0,
+      affectedMotorCount: 0,
+      peakMotorSpreadRatio: null,
+      perMotor: [],
+    };
+  }
+
+  const perMotor = Array.from({ length: maxMotorCount }, (_, index) => ({
+    motor: index + 1,
+    rpmValues: [],
+    activeRpmValues: [],
+    activeDeltas: [],
+  }));
+  const normalizedDeltas = [];
+  const activeNormalizedDeltas = [];
+  const activeAvgRpms = [];
+  const activeThrottles = [];
+
+  for (const sample of samples) {
+    for (let index = 0; index < maxMotorCount; index += 1) {
+      const rpm = sample?.rpm?.[index];
+      if (Number.isFinite(rpm)) {
+        perMotor[index].rpmValues.push(rpm);
+      }
+    }
+  }
+
+  for (let index = 1; index < samples.length; index += 1) {
+    const previous = samples[index - 1];
+    const current = samples[index];
+    const throttleValues = getFiniteValues([
+      previous?.rc?.throttle,
+      current?.rc?.throttle,
+    ]);
+    const avgThrottle = average(throttleValues);
+
+    for (let motorIndex = 0; motorIndex < maxMotorCount; motorIndex += 1) {
+      const previousRpm = previous?.rpm?.[motorIndex];
+      const currentRpm = current?.rpm?.[motorIndex];
+      if (!Number.isFinite(previousRpm) || !Number.isFinite(currentRpm)) {
+        continue;
+      }
+
+      const avgRpm = (previousRpm + currentRpm) / 2;
+      const delta = currentRpm - previousRpm;
+      const normalizedDelta = Math.abs(delta) / Math.max(avgRpm, 1);
+      normalizedDeltas.push(normalizedDelta);
+
+      const isActivePair =
+        avgThrottle !== null &&
+        avgThrottle >= minActiveThrottle &&
+        avgRpm >= minAverageRpm &&
+        current?.mode?.armed !== false;
+
+      if (!isActivePair) {
+        continue;
+      }
+
+      activeNormalizedDeltas.push(normalizedDelta);
+      activeAvgRpms.push(avgRpm);
+      activeThrottles.push(avgThrottle);
+      perMotor[motorIndex].activeRpmValues.push(previousRpm, currentRpm);
+      perMotor[motorIndex].activeDeltas.push({
+        delta,
+        normalizedDelta,
+      });
+    }
+  }
+
+  let signFlips = 0;
+  let signOpportunities = 0;
+  for (const motor of perMotor) {
+    for (let index = 1; index < motor.activeDeltas.length; index += 1) {
+      const previous = motor.activeDeltas[index - 1];
+      const current = motor.activeDeltas[index];
+      if (
+        previous.normalizedDelta < minFlipNormalizedDelta ||
+        current.normalizedDelta < minFlipNormalizedDelta
+      ) {
+        continue;
+      }
+      signOpportunities += 1;
+      if (Math.sign(previous.delta) !== Math.sign(current.delta)) {
+        signFlips += 1;
+      }
+    }
+  }
+
+  const summarizedMotors = perMotor.map((motor) => {
+    const activeValues = motor.activeRpmValues;
+    const fallbackValues = motor.rpmValues;
+    const values = activeValues.length ? activeValues : fallbackValues;
+    const avg = average(values);
+    const min = values.length ? Math.min(...values) : null;
+    const max = values.length ? Math.max(...values) : null;
+    const spread = min === null || max === null ? null : max - min;
+    const spreadRatio =
+      avg === null || spread === null ? null : spread / Math.max(avg, 1);
+
+    return {
+      motor: motor.motor,
+      min,
+      max,
+      avg,
+      spread,
+      spreadRatio,
+      activeDeltaCount: motor.activeDeltas.length,
+    };
+  });
+
+  const affectedMotorCount = summarizedMotors.filter(
+    (motor) =>
+      motor.spreadRatio !== null && motor.spreadRatio >= minAffectedMotorSpreadRatio
+  ).length;
+  const peakMotorSpreadRatio = summarizedMotors.reduce(
+    (peak, motor) =>
+      motor.spreadRatio === null ? peak : Math.max(peak ?? 0, motor.spreadRatio),
+    null
+  );
+  const avgNormalizedDelta = average(activeNormalizedDeltas);
+  const overallNormalizedDelta = average(normalizedDeltas);
+  const flipRate = signOpportunities ? signFlips / signOpportunities : 0;
+  const oscillationScore =
+    avgNormalizedDelta === null ? 0 : avgNormalizedDelta * (0.55 + flipRate);
+
+  return {
+    hasRpmData: normalizedDeltas.length > 0,
+    sampleCount: samples.length,
+    pairCount: normalizedDeltas.length,
+    activePairCount: activeNormalizedDeltas.length,
+    avgThrottle: average(activeThrottles),
+    avgRpm: average(activeAvgRpms),
+    avgNormalizedDelta,
+    overallNormalizedDelta,
+    peakNormalizedDelta: normalizedDeltas.length ? Math.max(...normalizedDeltas) : null,
+    flipRate,
+    oscillationScore,
+    affectedMotorCount,
+    peakMotorSpreadRatio,
+    perMotor: summarizedMotors,
+  };
 }
 
 export function getLowThrottleReviewSummary(samples, options = {}) {

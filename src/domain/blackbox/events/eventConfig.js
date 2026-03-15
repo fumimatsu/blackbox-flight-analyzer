@@ -6,6 +6,7 @@ export const EVENT_TYPES = {
   LOADED_ROLL_ARC: "loaded-roll-arc",
   HIGH_ERROR_BURST: "high-error-burst",
   SATURATION_BURST: "saturation-burst",
+  MOTOR_CHATTER: "motor-chatter",
   BATTERY_WARNING: "battery-warning",
   BATTERY_CRITICAL: "battery-critical",
 };
@@ -45,6 +46,13 @@ export const EVENT_CONFIG = {
     priority: 3,
     labelKey: "events.saturationBurst",
     reviewReasonKey: "events.saturationBurstReason",
+  },
+  [EVENT_TYPES.MOTOR_CHATTER]: {
+    minDurationUs: 140000,
+    maxGapUs: 50000,
+    priority: 2,
+    labelKey: "events.motorChatter",
+    reviewReasonKey: "events.motorChatterReason",
   },
   [EVENT_TYPES.BATTERY_WARNING]: {
     minDurationUs: 250000,

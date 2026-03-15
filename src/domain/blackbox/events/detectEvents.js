@@ -2,6 +2,7 @@ import {
   getErrorMagnitude,
   getFlightStatusSummary,
   getLowThrottleReviewSummary,
+  getMotorChatterReviewSummary,
 } from "../derived/flightDerived.js";
 import { EVENT_CONFIG, EVENT_TYPES } from "./eventConfig.js";
 import { translate } from "../../../i18n/index.js";
@@ -20,7 +21,8 @@ function summarizeSegment(
   samples,
   locale,
   lowThrottleContext = null,
-  batteryContext = null
+  batteryContext = null,
+  motorChatterContext = null
 ) {
   const config = EVENT_CONFIG[type];
   const peakError = Math.round(
@@ -79,6 +81,16 @@ function summarizeSegment(
       return {
         summary: translate(locale, config.labelKey),
         detail: translate(locale, "events.saturationBurstDetail", { peakMotor }),
+      };
+    case EVENT_TYPES.MOTOR_CHATTER:
+      return {
+        summary: translate(locale, config.labelKey),
+        detail: translate(locale, "events.motorChatterDetail", {
+          oscillation: Math.round((motorChatterContext?.avgNormalizedDelta ?? 0) * 100),
+          flipRate: Math.round((motorChatterContext?.flipRate ?? 0) * 100),
+          affectedMotors: motorChatterContext?.affectedMotorCount ?? 0,
+          avgThrottle: Math.round(motorChatterContext?.avgThrottle ?? 0),
+        }),
       };
     case EVENT_TYPES.BATTERY_WARNING:
       return {
@@ -148,12 +160,17 @@ function finalizeSegment(events, type, startUs, endUs, samples, locale, options 
         ),
       }
     : null;
+  const motorChatterContext =
+    type === EVENT_TYPES.MOTOR_CHATTER
+      ? getMotorChatterReviewSummary(samples)
+      : null;
   const summary = summarizeSegment(
     type,
     samples,
     locale,
     lowThrottleContext,
-    batteryContext
+    batteryContext,
+    motorChatterContext
   );
 
   events.push({
@@ -169,6 +186,7 @@ function finalizeSegment(events, type, startUs, endUs, samples, locale, options 
     reviewReason: translate(locale, config.reviewReasonKey),
     lowThrottleContext,
     batteryContext,
+    motorChatterContext,
   });
 }
 
@@ -230,6 +248,12 @@ function segmentByPredicate(samples, type, predicate, locale, options = {}) {
 }
 
 function overlaps(a, b) {
+  if (
+    a.type === EVENT_TYPES.MOTOR_CHATTER ||
+    b.type === EVENT_TYPES.MOTOR_CHATTER
+  ) {
+    return false;
+  }
   return a.startUs < b.endUs && b.startUs < a.endUs;
 }
 
@@ -310,9 +334,19 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
           : null,
     };
   });
+  const derivedWithMotorChatter = derived.map((sample, index) => {
+    const localStart = Math.max(0, index - 2);
+    const localEnd = Math.min(derived.length, index + 3);
+    const motorChatter = getMotorChatterReviewSummary(derived.slice(localStart, localEnd));
+
+    return {
+      ...sample,
+      motorChatter,
+    };
+  });
 
   const events = [
-    ...segmentByPredicate(derived, EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, (sample) => {
+    ...segmentByPredicate(derivedWithMotorChatter, EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, (sample) => {
       if (
         sample.rc.throttle === null ||
         sample.turnInput === null ||
@@ -326,7 +360,7 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
         score: (sample.rc.throttle ?? 0) + ((sample.errorMagnitude ?? 0) * 0.3),
       };
     }, locale),
-    ...segmentByPredicate(derived, EVENT_TYPES.CHOP_TURN, (sample) => {
+    ...segmentByPredicate(derivedWithMotorChatter, EVENT_TYPES.CHOP_TURN, (sample) => {
       if (
         sample.previousThrottle === null ||
         sample.rc.throttle === null ||
@@ -343,7 +377,7 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
         score: (sample.throttleDrop ?? 0) + sample.turnInput,
       };
     }, locale),
-    ...segmentByPredicate(derived, EVENT_TYPES.LOADED_ROLL_ARC, (sample) => {
+    ...segmentByPredicate(derivedWithMotorChatter, EVENT_TYPES.LOADED_ROLL_ARC, (sample) => {
       if (
         sample.rc.throttle === null ||
         sample.setpoint.roll === null ||
@@ -359,7 +393,7 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
         score: Math.abs(sample.setpoint.roll) + (sample.rc.throttle ?? 0),
       };
     }, locale),
-    ...segmentByPredicate(derived, EVENT_TYPES.HIGH_ERROR_BURST, (sample) => {
+    ...segmentByPredicate(derivedWithMotorChatter, EVENT_TYPES.HIGH_ERROR_BURST, (sample) => {
       if (
         sample.errorMagnitude === null ||
         sample.errorMagnitude < 110 ||
@@ -372,7 +406,7 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
         score: sample.errorMagnitude,
       };
     }, locale),
-    ...segmentByPredicate(derived, EVENT_TYPES.SATURATION_BURST, (sample) => {
+    ...segmentByPredicate(derivedWithMotorChatter, EVENT_TYPES.SATURATION_BURST, (sample) => {
       if (!sample.status.saturation || sample.rc.throttle === null || sample.rc.throttle < 45) {
         return false;
       }
@@ -382,7 +416,36 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
       };
     }, locale),
     ...segmentByPredicate(
-      derived,
+      derivedWithMotorChatter,
+      EVENT_TYPES.MOTOR_CHATTER,
+      (sample) => {
+        if (
+          sample.mode?.armed === false ||
+          sample.motorChatter.activePairCount < 4 ||
+          (sample.motorChatter.avgThrottle ?? 0) < 18 ||
+          (sample.motorChatter.avgRpm ?? 0) < 900 ||
+          sample.motorChatter.affectedMotorCount < 2
+        ) {
+          return false;
+        }
+
+        if (
+          (sample.motorChatter.oscillationScore ?? 0) < 0.04 ||
+          (sample.motorChatter.avgNormalizedDelta ?? 0) < 0.045
+        ) {
+          return false;
+        }
+
+        return {
+          score:
+            (sample.motorChatter.oscillationScore ?? 0) * 1000 +
+            (sample.motorChatter.flipRate ?? 0) * 100,
+        };
+      },
+      locale
+    ),
+    ...segmentByPredicate(
+      derivedWithMotorChatter,
       EVENT_TYPES.BATTERY_WARNING,
       (sample) => {
         if (sample.batteryState !== "warning") {
@@ -404,7 +467,7 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
       }
     ),
     ...segmentByPredicate(
-      derived,
+      derivedWithMotorChatter,
       EVENT_TYPES.BATTERY_CRITICAL,
       (sample) => {
         if (sample.batteryState !== "critical") {

@@ -2,6 +2,7 @@ import {
   getErrorMagnitude,
   getFlightStatusSummary,
   getLowThrottleReviewSummary,
+  getMotorChatterReviewSummary,
 } from "../blackbox/derived/flightDerived.js";
 import { EVENT_TYPES } from "../blackbox/events/eventConfig.js";
 import { translate } from "../../i18n/index.js";
@@ -49,6 +50,7 @@ function buildEvidence(flight, locale) {
   const lowThrottleSummary = getLowThrottleReviewSummary(samples);
   const stickIntentSummary = getStickIntentReviewSummary(samples, setupSummary);
   const batterySummary = getBatteryReviewSummary(samples, setupSummary);
+  const motorChatterSummary = getMotorChatterReviewSummary(samples);
   const dynamicIdleItem = setupSummary?.groups
     ?.find((group) => group.key === "idleThrottle")
     ?.items?.find((item) => item.key === "dynamicIdleMinRpm");
@@ -68,6 +70,7 @@ function buildEvidence(flight, locale) {
     peakError: max(errorMagnitudes),
     peakMotor: max(motorPeaks),
     lowThrottleSummary,
+    motorChatterSummary,
     stickIntentSummary,
     batterySummary,
     dynamicIdleConfigured: dynamicIdleItem?.value ?? null,
@@ -123,6 +126,45 @@ export const DIAGNOSTIC_RULES = [
         : (evidence.eventCounts[EVENT_TYPES.BATTERY_CRITICAL] ?? 0) >= 1
           ? 0.76
           : 0.6;
+      return confidenceLabel(score);
+    },
+    officialSources: [OFFICIAL_SOURCES.freestyle, OFFICIAL_SOURCES.tuning43],
+  },
+  {
+    id: "motor-rpm-chatter",
+    labelKey: "diagnostics.motorChatterLabel",
+    eventTypes: [EVENT_TYPES.MOTOR_CHATTER],
+    predicate(evidence) {
+      return (
+        (evidence.eventCounts[EVENT_TYPES.MOTOR_CHATTER] ?? 0) >= 1 &&
+        evidence.motorChatterSummary.hasRpmData &&
+        evidence.motorChatterSummary.activePairCount >= 8 &&
+        (evidence.motorChatterSummary.oscillationScore ?? 0) >= 0.04 &&
+        evidence.motorChatterSummary.affectedMotorCount >= 2
+      );
+    },
+    evidenceSummary(evidence, locale) {
+      return translate(locale, "diagnostics.motorChatterEvidence", {
+        oscillation: Math.round(
+          (evidence.motorChatterSummary.avgNormalizedDelta ?? 0) * 100
+        ),
+        flipRate: Math.round((evidence.motorChatterSummary.flipRate ?? 0) * 100),
+        affectedMotors: evidence.motorChatterSummary.affectedMotorCount ?? 0,
+        throttle: Math.round(evidence.motorChatterSummary.avgThrottle ?? 0),
+      });
+    },
+    likelyCheckKeys: [
+      "diagnostics.motorChatterCheck1",
+      "diagnostics.motorChatterCheck2",
+      "diagnostics.motorChatterCheck3",
+    ],
+    confidence(evidence) {
+      const score = Math.min(
+        1,
+        ((evidence.motorChatterSummary.oscillationScore ?? 0) / 0.08) +
+          ((evidence.motorChatterSummary.flipRate ?? 0) * 0.4) +
+          ((evidence.eventCounts[EVENT_TYPES.MOTOR_CHATTER] ?? 0) >= 2 ? 0.15 : 0)
+      );
       return confidenceLabel(score);
     },
     officialSources: [OFFICIAL_SOURCES.freestyle, OFFICIAL_SOURCES.tuning43],
