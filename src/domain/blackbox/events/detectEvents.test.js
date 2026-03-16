@@ -100,16 +100,17 @@ describe("detectAnalysisEvents", () => {
 
     const events = detectAnalysisEvents({ samples });
 
-    expect(events).toHaveLength(1);
-    expect(events[0].type).toBe(EVENT_TYPES.CHOP_TURN);
-    expect(events[0].lowThrottleContext).toEqual(
+    const chopTurn = events.find((event) => event.type === EVENT_TYPES.CHOP_TURN);
+
+    expect(chopTurn).toBeTruthy();
+    expect(chopTurn.lowThrottleContext).toEqual(
       expect.objectContaining({
         hasRpmData: true,
         lowThrottleSamples: 3,
         rpmFloor: 840,
       })
     );
-    expect(events[0].detail).toContain("RPM floor");
+    expect(chopTurn.detail).toContain("RPM floor");
   });
 
   it("detects battery warning and critical bands from embedded thresholds", () => {
@@ -143,7 +144,8 @@ describe("detectAnalysisEvents", () => {
   it("detects motor chatter during active rpm oscillation", () => {
     const samples = Array.from({ length: 8 }, (_, index) =>
       buildSample(index * 50000, {
-        rc: { throttle: 58 },
+        rc: { throttle: index < 2 ? 42 : 68, roll: 190 },
+        setpoint: { roll: 240, pitch: 30, yaw: 0 },
         rpm:
           index % 2 === 0
             ? [1520, 1120, 1510, 1130]
@@ -177,5 +179,37 @@ describe("detectAnalysisEvents", () => {
     const events = detectAnalysisEvents({ samples });
 
     expect(events.map((event) => event.type)).not.toContain(EVENT_TYPES.MOTOR_CHATTER);
+  });
+
+  it("treats broad background oscillation as baseline and highlights burstier turn windows", () => {
+    const samples = Array.from({ length: 22 }, (_, index) => {
+      const burst = index >= 8 && index <= 16;
+      return buildSample(index * 50000, {
+        rc: {
+          throttle: burst ? (index < 11 ? 46 : 76) : 56,
+          roll: burst ? 210 : 22,
+        },
+        setpoint: {
+          roll: burst ? 260 : 30,
+          pitch: burst ? 70 : 10,
+          yaw: 0,
+        },
+        rpm:
+          index % 2 === 0
+            ? burst
+              ? [1570, 1070, 1540, 1050]
+              : [1470, 1410, 1460, 1405]
+            : burst
+              ? [1040, 1580, 1030, 1590]
+              : [1400, 1475, 1405, 1468],
+      });
+    });
+
+    const events = detectAnalysisEvents({ samples });
+    const chatterEvents = events.filter((event) => event.type === EVENT_TYPES.MOTOR_CHATTER);
+
+    expect(chatterEvents).toHaveLength(1);
+    expect(chatterEvents[0].startUs).toBeGreaterThanOrEqual(8 * 50000);
+    expect(chatterEvents[0].endUs).toBeLessThanOrEqual(16 * 50000);
   });
 });

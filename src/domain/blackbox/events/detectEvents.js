@@ -16,6 +16,41 @@ function axisPeak(values) {
   return Math.max(...numbers.map((value) => Math.abs(value)));
 }
 
+function percentile(values, ratio) {
+  if (!values.length) {
+    return null;
+  }
+  const sorted = [...values].sort((left, right) => left - right);
+  const index = Math.min(
+    sorted.length - 1,
+    Math.max(0, Math.floor((sorted.length - 1) * ratio))
+  );
+  return sorted[index];
+}
+
+function buildMotorChatterThresholds(samples) {
+  const activeWindows = samples.filter(
+    (sample) =>
+      sample.motorChatter.activePairCount >= 4 &&
+      (sample.motorChatter.avgThrottle ?? 0) >= 18 &&
+      (sample.motorChatter.avgRpm ?? 0) >= 900
+  );
+  const scores = activeWindows
+    .map((sample) => sample.motorChatter.oscillationScore)
+    .filter((value) => Number.isFinite(value));
+  const normalizedDeltas = activeWindows
+    .map((sample) => sample.motorChatter.avgNormalizedDelta)
+    .filter((value) => Number.isFinite(value));
+
+  return {
+    scoreThreshold: Math.max(0.055, (percentile(scores, 0.97) ?? 0) * 0.92),
+    normalizedDeltaThreshold: Math.max(
+      0.05,
+      (percentile(normalizedDeltas, 0.95) ?? 0) * 0.9
+    ),
+  };
+}
+
 function summarizeSegment(
   type,
   samples,
@@ -317,6 +352,13 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
         sample.rc.throttle !== undefined
           ? previous.rc.throttle - sample.rc.throttle
           : null,
+      throttleRise:
+        previous?.rc.throttle !== null &&
+        previous?.rc.throttle !== undefined &&
+        sample.rc.throttle !== null &&
+        sample.rc.throttle !== undefined
+          ? sample.rc.throttle - previous.rc.throttle
+          : null,
       status,
       errorMagnitude: getErrorMagnitude(sample.error),
       turnInput: rcTurnInput,
@@ -335,8 +377,8 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
     };
   });
   const derivedWithMotorChatter = derived.map((sample, index) => {
-    const localStart = Math.max(0, index - 2);
-    const localEnd = Math.min(derived.length, index + 3);
+    const localStart = Math.max(0, index - 3);
+    const localEnd = Math.min(derived.length, index + 4);
     const motorChatter = getMotorChatterReviewSummary(derived.slice(localStart, localEnd));
 
     return {
@@ -344,6 +386,7 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
       motorChatter,
     };
   });
+  const motorChatterThresholds = buildMotorChatterThresholds(derivedWithMotorChatter);
 
   const events = [
     ...segmentByPredicate(derivedWithMotorChatter, EVENT_TYPES.HIGH_THROTTLE_STRAIGHT, (sample) => {
@@ -419,19 +462,35 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
       derivedWithMotorChatter,
       EVENT_TYPES.MOTOR_CHATTER,
       (sample) => {
+        const turnDemand = Math.max(
+          sample.turnInput ?? 0,
+          (sample.setpointTurnInput ?? 0) * 0.75
+        );
+        const throttlePunch =
+          (sample.throttleRise ?? 0) >= 10 ||
+          ((sample.previousThrottle ?? 0) < 55 && (sample.rc.throttle ?? 0) >= 62);
+        const loadedDemand =
+          turnDemand >= 135 ||
+          throttlePunch ||
+          ((sample.rc.throttle ?? 0) >= 72 && (sample.motorChatter.flipRate ?? 0) >= 0.35);
+
         if (
           sample.mode?.armed === false ||
           sample.motorChatter.activePairCount < 4 ||
-          (sample.motorChatter.avgThrottle ?? 0) < 18 ||
+          (sample.motorChatter.avgThrottle ?? 0) < 22 ||
           (sample.motorChatter.avgRpm ?? 0) < 900 ||
-          sample.motorChatter.affectedMotorCount < 2
+          !loadedDemand
         ) {
           return false;
         }
 
         if (
-          (sample.motorChatter.oscillationScore ?? 0) < 0.04 ||
-          (sample.motorChatter.avgNormalizedDelta ?? 0) < 0.045
+          (sample.motorChatter.oscillationScore ?? 0) <
+            motorChatterThresholds.scoreThreshold ||
+          (sample.motorChatter.avgNormalizedDelta ?? 0) <
+            motorChatterThresholds.normalizedDeltaThreshold ||
+          (sample.motorChatter.affectedMotorCount < 2 &&
+            (sample.motorChatter.peakMotorSpreadRatio ?? 0) < 0.24)
         ) {
           return false;
         }
@@ -439,7 +498,9 @@ export function detectAnalysisEvents(windowSlice, locale = "en", options = {}) {
         return {
           score:
             (sample.motorChatter.oscillationScore ?? 0) * 1000 +
-            (sample.motorChatter.flipRate ?? 0) * 100,
+            (sample.motorChatter.flipRate ?? 0) * 100 +
+            turnDemand * 0.2 +
+            ((sample.throttleRise ?? 0) * 4),
         };
       },
       locale
