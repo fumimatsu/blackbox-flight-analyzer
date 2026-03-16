@@ -2204,7 +2204,7 @@ export function App() {
     return getFlightWindow(
       preparedFlight,
       currentTimeUs - overlayState.stickMiniGraphWindowUs,
-      currentTimeUs,
+      currentTimeUs + overlayState.stickMiniGraphWindowUs,
       180,
       {
         sampleStrategy: "fixed-interval",
