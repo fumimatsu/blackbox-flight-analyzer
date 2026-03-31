@@ -548,7 +548,16 @@ function normalizeHeadingDegrees(value) {
   return normalized;
 }
 
-function AttitudeIndicator({ attitude, labels }) {
+const MOTOR_POSITION_LAYOUT = [
+  { position: "front-left", motorIndex: 3, label: "M4" },
+  { position: "front-right", motorIndex: 1, label: "M2" },
+  { position: "rear-left", motorIndex: 2, label: "M3" },
+  { position: "rear-right", motorIndex: 0, label: "M1" },
+];
+
+const MOTOR_BAR_DISPLAY_ORDER = [3, 2, 1, 0];
+
+function AttitudeIndicator({ attitude, labels, motors = [] }) {
   const roll = attitude?.roll ?? null;
   const pitch = attitude?.pitch ?? null;
   const yaw = normalizeHeadingDegrees(attitude?.yaw ?? null);
@@ -566,23 +575,41 @@ function AttitudeIndicator({ attitude, labels }) {
         <span>{labels.title}</span>
         <strong>{yawText}</strong>
       </div>
-      <div className="attitude-card__scene">
-        <div className="attitude-card__ring" />
-        <div className="attitude-card__crosshair" />
-        <div className="attitude-card__compass attitude-card__compass--front">{labels.front}</div>
-        <div className="attitude-card__compass attitude-card__compass--rear">{labels.rear}</div>
-        <div className="attitude-card__craft" style={quadStyle}>
-          <span className="attitude-card__arm attitude-card__arm--diag-a" />
-          <span className="attitude-card__arm attitude-card__arm--diag-b" />
-          <span className="attitude-card__motor attitude-card__motor--front-left" />
-          <span className="attitude-card__motor attitude-card__motor--front-right" />
-          <span className="attitude-card__motor attitude-card__motor--rear-left" />
-          <span className="attitude-card__motor attitude-card__motor--rear-right" />
-          <span className="attitude-card__body">
-            <span className="attitude-card__body-core" />
-            <span className="attitude-card__nose" />
-          </span>
-        </div>
+        <div className="attitude-card__scene">
+          <div className="attitude-card__ring" />
+          <div className="attitude-card__crosshair" />
+          <div className="attitude-card__compass attitude-card__compass--front">{labels.front}</div>
+          <div className="attitude-card__compass attitude-card__compass--rear">{labels.rear}</div>
+          <div className="attitude-card__craft" style={quadStyle}>
+            <span className="attitude-card__arm attitude-card__arm--diag-a" />
+            <span className="attitude-card__arm attitude-card__arm--diag-b" />
+            {MOTOR_POSITION_LAYOUT.map(({ position, motorIndex, label }) => {
+              const value = motors[motorIndex] ?? null;
+              const scale = value === null ? 0.9 : 0.86 + Math.max(0, Math.min(100, value)) / 260;
+              const opacity = value === null ? 0.72 : 0.78 + Math.max(0, Math.min(100, value)) / 420;
+
+              return (
+                <React.Fragment key={label}>
+                  <span
+                    className={`attitude-card__motor attitude-card__motor--${position}`}
+                    style={{
+                      transform: `scale(${scale})`,
+                      opacity,
+                    }}
+                  />
+                  <span
+                    className={`attitude-card__motor-label attitude-card__motor-label--${position}`}
+                  >
+                    {label}
+                  </span>
+                </React.Fragment>
+              );
+            })}
+            <span className="attitude-card__body">
+              <span className="attitude-card__body-core" />
+              <span className="attitude-card__nose" />
+            </span>
+          </div>
       </div>
       <div className="attitude-card__values">
         <span>{labels.roll} {rollText}</span>
@@ -761,15 +788,16 @@ function drawMotorCardCanvas(context, x, y, snapshot, motorStats, overlaySummary
     x + 88,
     y + 40
   );
-  snapshot.motors.slice(0, 4).forEach((value, index) => {
-    const barX = x + 14 + index * 38;
+  MOTOR_BAR_DISPLAY_ORDER.forEach((motorIndex, displayIndex) => {
+    const value = snapshot.motors[motorIndex] ?? null;
+    const barX = x + 14 + displayIndex * 38;
     const barHeight = 58;
     drawRoundedRect(context, barX, y + 64, 14, barHeight, 7, "rgba(255,255,255,0.06)", "rgba(255,255,255,0.08)");
     const fillHeight = ((value ?? 0) / 100) * barHeight;
     context.fillStyle = value === motorStats?.max ? "#98beff" : "#7df2c5";
     drawRoundedRect(context, barX + 1, y + 64 + barHeight - fillHeight - 1, 12, fillHeight, 6, context.fillStyle);
     context.fillStyle = "rgba(149,174,181,0.95)";
-    context.fillText(`M${index + 1}`, barX - 1, y + 52);
+    context.fillText(`M${motorIndex + 1}`, barX - 1, y + 52);
   });
 }
 
@@ -1380,15 +1408,15 @@ function MotorDetailCard({ motors, spread, saturation, t }) {
         </div>
       </div>
       <div className="motor-detail__grid">
-        {Array.from({ length: 4 }, (_, index) => {
-          const value = motors[index] ?? null;
+        {MOTOR_BAR_DISPLAY_ORDER.map((motorIndex) => {
+          const value = motors[motorIndex] ?? null;
           const fill = value === null ? 0 : Math.max(0, Math.min(100, value));
           const state =
             value === null ? "missing" : value >= 95 ? "warn" : peak !== null && value === peak ? "peak" : "ok";
 
           return (
-            <div key={`motor-${index}`} className={`motor-detail__cell motor-detail__cell--${state}`}>
-              <span className="motor-detail__label">M{index + 1}</span>
+            <div key={`motor-${motorIndex}`} className={`motor-detail__cell motor-detail__cell--${state}`}>
+              <span className="motor-detail__label">M{motorIndex + 1}</span>
               <div className="motor-detail__bar">
                 <div className="motor-detail__fill" style={{ height: `${fill}%` }} />
               </div>
@@ -3157,6 +3185,7 @@ export function App() {
                   <div className="overlay overlay--attitude">
                     <AttitudeIndicator
                       attitude={snapshot.attitude}
+                      motors={snapshot.motors}
                       labels={{
                         title: t("overlay.attitude"),
                         front: t("overlay.front"),
