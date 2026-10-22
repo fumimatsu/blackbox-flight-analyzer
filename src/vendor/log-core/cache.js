@@ -9,80 +9,82 @@
  * Element age is determined by the time it was added or last get()'d from the cache.
  */
 export function FIFOCache(initialCapacity) {
-  //Private:
-  let queue = [],
-    items = {};
+    //Private:
+    let queue = [],
+        items = {};
 
-  function removeFromQueue(key) {
-    for (let i = 0; i < queue.length; i++) {
-      if (queue[i] == key) {
-        //Assume there's only one copy to remove:
-        for (let j = i; j < queue.length - 1; j++) {
-          queue[j] = queue[j + 1];
+    function removeFromQueue(key) {
+        for (let i = 0; i < queue.length; i++) {
+            if (queue[i] === key) {
+                //Assume there's only one copy to remove:
+                for (let j = i; j < queue.length - 1; j++) {
+                    queue[j] = queue[j + 1];
+                }
+
+                queue.length--;
+                break;
+            }
+        }
+    }
+
+    //Public:
+    this.capacity = initialCapacity;
+
+    /**
+     * Remove and return the oldest value from the cache to be reused, or null if the cache wasn't full.
+     */
+    this.recycle = function () {
+        if (queue.length > this.capacity) {
+            const key = queue.shift(),
+                result = items[key];
+
+            delete items[key];
+
+            return result;
         }
 
-        queue.length--;
-        break;
-      }
-    }
-  }
+        return null;
+    };
 
-  //Public:
-  this.capacity = initialCapacity;
+    /**
+     * Add a mapping for the given key to the cache. If an existing value with that key was
+     * present, it will be overwritten.
+     */
+    this.add = function (key, value) {
+        // Was this already cached? Bump it back up to the end of the queue
+        if (items[key] !== undefined) {
+            removeFromQueue(key);
+        }
 
-  /**
-   * Remove and return the oldest value from the cache to be reused, or null if the cache wasn't full.
-   */
-  this.recycle = function () {
-    if (queue.length > this.capacity) {
-      let key = queue.shift(),
-        result = items[key];
+        queue.push(key);
 
-      delete items[key];
+        items[key] = value;
 
-      return result;
-    }
+        while (queue.length > this.capacity + 1) {
+            delete items[queue.shift()];
+        }
+    };
 
-    return null;
-  };
+    /**
+     * Return the value in the cache that corresponds to the given key, or undefined if it has
+     * expired or had never been stored.
+     */
+    this.get = function (key) {
+        const item = items[key];
 
-  /**
-   * Add a mapping for the given key to the cache. If an existing value with that key was
-   * present, it will be overwritten.
-   */
-  this.add = function (key, value) {
-    // Was this already cached? Bump it back up to the end of the queue
-    if (items[key] !== undefined) removeFromQueue(key);
+        if (item) {
+            removeFromQueue(key);
+            queue.push(key);
+        }
 
-    queue.push(key);
+        return item;
+    };
 
-    items[key] = value;
-
-    while (queue.length > this.capacity + 1) {
-      delete items[queue.shift()];
-    }
-  };
-
-  /**
-   * Return the value in the cache that corresponds to the given key, or undefined if it has
-   * expired or had never been stored.
-   */
-  this.get = function (key) {
-    let item = items[key];
-
-    if (item) {
-      removeFromQueue(key);
-      queue.push(key);
-    }
-
-    return item;
-  };
-
-  /**
-   * Erase the entire content of the cache
-   */
-  this.clear = function () {
-    queue = [];
-    items = {};
-  };
+    /**
+     * Erase the entire content of the cache
+     */
+    this.clear = function () {
+        queue = [];
+        items = {};
+    };
 }

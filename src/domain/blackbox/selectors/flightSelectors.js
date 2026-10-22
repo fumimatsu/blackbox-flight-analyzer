@@ -1,5 +1,5 @@
 import { FlightLogParser } from "../../../vendor/log-core/flightlog_parser.js";
-import { DEBUG_MODE } from "../../../vendor/log-core/flightlog_fielddefs.js";
+import { getDebugModes } from "../../../vendor/log-core/debugModes.js";
 
 const AXES = ["roll", "pitch", "yaw"];
 const AXIS_INDEX = { roll: 0, pitch: 1, yaw: 2 };
@@ -151,7 +151,7 @@ function getDebugModeName(session) {
   if (modeIndex === null || modeIndex === undefined || Number.isNaN(modeIndex)) {
     return null;
   }
-  return DEBUG_MODE[modeIndex] ?? null;
+  return getDebugModes(session.log.getSysConfig().apiVersion)[modeIndex] ?? null;
 }
 
 function getDebugValues(session, frame) {

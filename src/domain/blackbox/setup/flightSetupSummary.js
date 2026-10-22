@@ -1,3 +1,4 @@
+import semver from "semver";
 import {
   FAST_PROTOCOL,
   FF_AVERAGING,
@@ -77,7 +78,7 @@ function formatPidAxis(values) {
 }
 
 function formatDMin(sysConfig) {
-  const explicit = pickFirst(sysConfig, ["d_min"]);
+  const explicit = pickFirst(sysConfig, ["d_max", "d_min"]);
   if (Array.isArray(explicit) && explicit.some((value) => isPresent(value))) {
     return formatTriplet(explicit);
   }
@@ -317,7 +318,13 @@ export function getFlightSetupSummary(session) {
       makeItem("rollPid", formatPidAxis(sysConfig.rollPID), sysConfig.rollPID?.slice(0, 3)),
       makeItem("pitchPid", formatPidAxis(sysConfig.pitchPID), sysConfig.pitchPID?.slice(0, 3)),
       makeItem("yawPid", formatPidAxis(sysConfig.yawPID), sysConfig.yawPID?.slice(0, 3)),
-      makeItem("dMin", formatDMin(sysConfig)),
+      makeItem(
+        sysConfig.firmwareType === 3 &&
+          semver.gte(semver.coerce(sysConfig.firmwareVersion) ?? "0.0.0", "2025.12.0")
+          ? "dMax"
+          : "dMin",
+        formatDMin(sysConfig)
+      ),
     ]),
     buildGroup("filters", [
       makeItem(

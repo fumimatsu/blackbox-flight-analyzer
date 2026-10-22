@@ -182,6 +182,7 @@ export const jaMessages = {
       pitchPid: "Pitch PID",
       yawPid: "Yaw PID",
       dMin: "D min",
+      dMax: "D max",
       gyroLpf: "Gyro LPF",
       dtermLpf: "D-term LPF",
       rpmFilter: "RPM filter",

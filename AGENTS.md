@@ -32,13 +32,12 @@
 - `ARMED`-based DVR auto sync.
 
 ## Important integration details
-- Vendored upstream modules still assume:
-  - `globalThis.$`
-  - `globalThis.jQuery`
-  - `globalThis.semver`
-- `src/react-main.jsx` initializes those prerequisites.
+- The 2026.6.2 vendored core imports semver directly and does not require global jQuery.
+- Existing application bootstrap compatibility globals remain in `src/react-main.jsx`.
 - `FlightLog` must be opened with `log.openLog(index)` before selectors use time-window APIs.
-- The adapter already picks the first readable log section and opens it.
+- The adapter opens all readable sections as independent flight sessions.
+- Parser provenance and compatibility checks: `docs/blackbox-compatibility.md`.
+- Spatial-review plan and DejaView integration boundaries: `docs/spatial-review-wbs.md`.
 
 ## Current structure intent
 - `src/app`: React shell

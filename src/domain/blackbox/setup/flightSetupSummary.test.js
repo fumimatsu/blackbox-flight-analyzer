@@ -15,6 +15,16 @@ function buildSession(sysConfig) {
 }
 
 describe("getFlightSetupSummary", () => {
+  it("labels the extended D values as D max for calendar-version firmware", () => {
+    const summary = getFlightSetupSummary(buildSession({
+      firmwareType: 3, firmwareVersion: "2026.6.2",
+      rollPID: [40, 60, 25, 35], pitchPID: [42, 62, 27, 37], yawPID: [30, 50, 0, 0],
+    }));
+    const items = summary.groups.find((group) => group.key === "pid").items;
+    expect(items).toContainEqual(expect.objectContaining({key: "dMax", value: "35 / 37 / 0"}));
+    expect(items.some((item) => item.key === "dMin")).toBe(false);
+  });
+
   it("builds review-oriented groups from modern sysConfig fields", () => {
     const summary = getFlightSetupSummary(
       buildSession({
