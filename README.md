@@ -80,6 +80,7 @@ The Vite `base` path is set automatically for GitHub Pages builds, while local d
 Rule-based tuning guidance is planned, but it should be grounded in official Betaflight references instead of ad-hoc guesses.
 
 - Draft notes: `docs/diagnostic-rules.md`
+- [Race Tuning Knowledge / レースのブレを切り分けるノウハウ](docs/tuning-knowledge/README.md): a Japanese guide to log evidence, comparison limits, an AirMode-ON case study, video references and a next-flight checklist. These are research notes, not automatic tuning or ready-to-apply PID recommendations.
 
 ## Notes
 
